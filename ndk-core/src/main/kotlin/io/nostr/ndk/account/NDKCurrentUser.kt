@@ -18,6 +18,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
@@ -51,12 +52,14 @@ class NDKCurrentUser(
     private var muteListTimestamp: Long = 0
     private var relayListTimestamp: Long = 0
     private var blockedRelayListTimestamp: Long = 0
+    private val sessionEventTimestamps = mutableMapOf<Int, Long>()
 
     // Session data flows
     private val _follows = MutableStateFlow<Set<PublicKey>>(emptySet())
     private val _mutes = MutableStateFlow(MuteList.empty(pubkey))
     private val _relayList = MutableStateFlow<RelayList?>(null)
     private val _blockedRelays = MutableStateFlow(BlockedRelayList.empty(pubkey))
+    private val _sessionEvents = MutableStateFlow<Map<Int, NDKEvent>>(emptyMap())
 
     /**
      * Subscription for session data (follows, mutes, relays, blocked relays).
@@ -88,6 +91,12 @@ class NDKCurrentUser(
     val blockedRelays: StateFlow<BlockedRelayList> = _blockedRelays.asStateFlow()
 
     /**
+     * Custom session events by kind.
+     * Contains events for kinds registered via NDK.registerSessionKind().
+     */
+    val sessionEvents: StateFlow<Map<Int, NDKEvent>> = _sessionEvents.asStateFlow()
+
+    /**
      * Signs an event using this user's signer.
      */
     suspend fun sign(event: UnsignedEvent): NDKEvent {
@@ -108,6 +117,7 @@ class NDKCurrentUser(
             KIND_SESSION_MUTE_LIST -> handleMuteList(event)
             KIND_SESSION_RELAY_LIST -> handleRelayList(event)
             KIND_SESSION_BLOCKED_RELAY_LIST -> handleBlockedRelayList(event)
+            else -> handleCustomKind(event)
         }
     }
 
@@ -139,6 +149,14 @@ class NDKCurrentUser(
         _blockedRelays.value = BlockedRelayList.fromEvent(event)
     }
 
+    private fun handleCustomKind(event: NDKEvent) {
+        val lastTimestamp = sessionEventTimestamps[event.kind] ?: 0L
+        if (event.createdAt <= lastTimestamp) return
+
+        sessionEventTimestamps[event.kind] = event.createdAt
+        _sessionEvents.update { it + (event.kind to event) }
+    }
+
     /**
      * Starts the session data subscription.
      * Called automatically by NDK.login().
@@ -147,12 +165,7 @@ class NDKCurrentUser(
         if (sessionSubscription != null) return
 
         val filter = NDKFilter(
-            kinds = setOf(
-                KIND_CONTACT_LIST,
-                KIND_SESSION_MUTE_LIST,
-                KIND_SESSION_RELAY_LIST,
-                KIND_SESSION_BLOCKED_RELAY_LIST
-            ),
+            kinds = ndk.getSessionKinds(),
             authors = setOf(pubkey)
         )
 

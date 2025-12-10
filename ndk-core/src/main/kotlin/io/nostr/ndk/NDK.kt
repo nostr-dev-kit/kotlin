@@ -73,6 +73,7 @@ class NDK(
     // Account management
     private val _currentUser = MutableStateFlow<NDKCurrentUser?>(null)
     private val _accounts = MutableStateFlow<List<NDKCurrentUser>>(emptyList())
+    private val _additionalSessionKinds = mutableSetOf<Int>()
 
     /**
      * The currently active user, or null if not logged in.
@@ -83,6 +84,28 @@ class NDK(
      * All logged-in accounts.
      */
     val accounts: StateFlow<List<NDKCurrentUser>> = _accounts.asStateFlow()
+
+    /**
+     * Registers an additional event kind to be auto-fetched for sessions.
+     * Call before login() to ensure the kind is included in the session subscription.
+     *
+     * @param kind The event kind to auto-fetch
+     */
+    fun registerSessionKind(kind: Int) {
+        _additionalSessionKinds.add(kind)
+    }
+
+    /**
+     * Gets all registered session kinds (core + additional).
+     */
+    internal fun getSessionKinds(): Set<Int> {
+        return setOf(
+            io.nostr.ndk.nips.KIND_CONTACT_LIST,
+            io.nostr.ndk.account.KIND_SESSION_MUTE_LIST,
+            io.nostr.ndk.account.KIND_SESSION_RELAY_LIST,
+            io.nostr.ndk.account.KIND_SESSION_BLOCKED_RELAY_LIST
+        ) + _additionalSessionKinds
+    }
 
     /**
      * Logs in with a signer and creates/activates a session.
