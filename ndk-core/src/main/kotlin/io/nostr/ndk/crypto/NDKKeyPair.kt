@@ -1,6 +1,7 @@
 package io.nostr.ndk.crypto
 
 import fr.acinq.secp256k1.Secp256k1
+import io.nostr.ndk.utils.Nip19
 
 /**
  * Represents a Nostr keypair with private and public keys.
@@ -26,10 +27,15 @@ data class NDKKeyPair(
 
     /**
      * Returns the npub (Bech32-encoded public key).
-     * Currently returns hex - Bech32 encoding to be added.
      */
     val npub: String
-        get() = pubkeyHex
+        get() = Nip19.encodeNpub(pubkeyHex)
+
+    /**
+     * Returns the nsec (Bech32-encoded private key), or null if no private key.
+     */
+    val nsec: String?
+        get() = privateKeyHex?.let { Nip19.encodeNsec(it) }
 
     companion object {
         private val secp256k1 = Secp256k1.get()
@@ -88,6 +94,32 @@ data class NDKKeyPair(
             val publicKey = hex.hexToBytes()
             require(publicKey.size == 32) { "Public key must be 32 bytes (64 hex characters)" }
             return NDKKeyPair(null, publicKey)
+        }
+
+        /**
+         * Creates a keypair from an nsec (Bech32-encoded private key).
+         *
+         * @param nsec Bech32-encoded private key (nsec1...)
+         * @return NDKKeyPair derived from the private key
+         * @throws IllegalArgumentException if nsec is invalid
+         */
+        fun fromNsec(nsec: String): NDKKeyPair {
+            val decoded = Nip19.decode(nsec)
+            require(decoded is Nip19.Decoded.Nsec) { "Invalid nsec format" }
+            return fromPrivateKey(decoded.privateKey)
+        }
+
+        /**
+         * Creates a read-only keypair from an npub (Bech32-encoded public key).
+         *
+         * @param npub Bech32-encoded public key (npub1...)
+         * @return NDKKeyPair with only public key (privateKey is null)
+         * @throws IllegalArgumentException if npub is invalid
+         */
+        fun fromNpub(npub: String): NDKKeyPair {
+            val decoded = Nip19.decode(npub)
+            require(decoded is Nip19.Decoded.Npub) { "Invalid npub format" }
+            return fromPublicKey(decoded.pubkey)
         }
     }
 

@@ -125,12 +125,55 @@ class NDKCryptoTest {
     }
 
     @Test
-    fun `npub encoding returns hex for now`() {
-        // Per requirements, npub should return hex until Bech32 is implemented in Task 5
+    fun `npub encoding uses Bech32`() {
+        val publicKeyHex = "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d"
+        val expectedNpub = "npub180cvv07tjdrrgpa0j7j7tmnyl2yr6yr7l8j4s3evf6u64th6gkwsyjh6w6"
+        val keyPair = NDKKeyPair.fromPublicKey(publicKeyHex)
+
+        assertEquals("npub should use Bech32 encoding", expectedNpub, keyPair.npub)
+        assertTrue("npub should start with npub1", keyPair.npub.startsWith("npub1"))
+    }
+
+    @Test
+    fun `nsec encoding uses Bech32`() {
+        val privateKeyHex = "67dea2ed018072d675f5415ecfaed7d2597555e202d85b3d65ea4e58d2d92ffa"
+        val expectedNsec = "nsec1vl029mgpspedva04g90vltkh6fvh240zqtv9k0t9af8935ke9laqsnlfe5"
+        val keyPair = NDKKeyPair.fromPrivateKey(privateKeyHex)
+
+        assertEquals("nsec should use Bech32 encoding", expectedNsec, keyPair.nsec)
+        assertTrue("nsec should start with nsec1", keyPair.nsec!!.startsWith("nsec1"))
+    }
+
+    @Test
+    fun `nsec is null for read-only keypair`() {
         val publicKeyHex = "7e7e9c42a91bfef19fa929e5fda1b72e0ebc1a4c1141673e2794234d86addf4e"
         val keyPair = NDKKeyPair.fromPublicKey(publicKeyHex)
 
-        assertEquals("npub should return hex until Bech32 implemented", publicKeyHex, keyPair.npub)
+        assertNull("nsec should be null for read-only keypair", keyPair.nsec)
+    }
+
+    @Test
+    fun `fromNpub creates keypair from Bech32 public key`() {
+        val npub = "npub180cvv07tjdrrgpa0j7j7tmnyl2yr6yr7l8j4s3evf6u64th6gkwsyjh6w6"
+        val expectedPubkeyHex = "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d"
+
+        val keyPair = NDKKeyPair.fromNpub(npub)
+
+        assertEquals("Public key should match", expectedPubkeyHex, keyPair.pubkeyHex)
+        assertNull("Private key should be null", keyPair.privateKey)
+        assertEquals("npub round trip", npub, keyPair.npub)
+    }
+
+    @Test
+    fun `fromNsec creates keypair from Bech32 private key`() {
+        val nsec = "nsec1vl029mgpspedva04g90vltkh6fvh240zqtv9k0t9af8935ke9laqsnlfe5"
+        val expectedPrivateKeyHex = "67dea2ed018072d675f5415ecfaed7d2597555e202d85b3d65ea4e58d2d92ffa"
+
+        val keyPair = NDKKeyPair.fromNsec(nsec)
+
+        assertEquals("Private key should match", expectedPrivateKeyHex, keyPair.privateKeyHex)
+        assertNotNull("Public key should be derived", keyPair.publicKey)
+        assertEquals("nsec round trip", nsec, keyPair.nsec)
     }
 
     @Test
