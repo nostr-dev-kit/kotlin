@@ -1,6 +1,7 @@
-package io.nostr.ndk.signer.amber
+package io.nostr.ndk.crypto
 
 import android.content.Context
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -8,8 +9,6 @@ import androidx.activity.result.ActivityResultLauncher
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
-import io.nostr.ndk.crypto.NDKSigner
-import io.nostr.ndk.crypto.UnsignedEvent
 import io.nostr.ndk.models.NDKEvent
 import io.nostr.ndk.models.NDKTag
 import io.nostr.ndk.models.PublicKey
@@ -19,38 +18,41 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
 /**
- * NIP-55 Android Signer Application (Amber) integration for NDK.
+ * NIP-55 Android Signer Application integration for NDK.
  *
- * This signer delegates event signing to the Amber app using Android Intents.
- * Amber is a key management app that securely stores private keys and signs
- * events without exposing the key to the requesting application.
+ * This signer delegates event signing to an external NIP-55 compliant signer app
+ * (such as Amber) using Android Intents. The signer app securely stores private
+ * keys and signs events without exposing the key to the requesting application.
+ *
+ * @see <a href="https://github.com/nostr-protocol/nips/blob/master/55.md">NIP-55</a>
  *
  * Usage:
  * ```kotlin
- * val signer = AmberSigner(context)
+ * val signer = Nip55Signer(context)
  *
  * // In your Activity:
- * private val amberLauncher = registerForActivityResult(
+ * private val signerLauncher = registerForActivityResult(
  *     ActivityResultContracts.StartActivityForResult()
  * ) { result ->
- *     signer.handleAmberResult(result.resultCode, result.data)
+ *     signer.handleResult(result.resultCode, result.data)
  * }
  *
  * // Set the launcher
- * signer.setActivityLauncher(amberLauncher)
+ * signer.setActivityLauncher(signerLauncher)
  *
  * // Sign an event
  * val signedEvent = signer.sign(unsignedEvent)
  * ```
  *
  * @property context Android context for launching intents
- * @property permissions List of permissions to request from Amber
- * @property packageName Package name of the Amber app (default: com.greenart7c3.nostrsigner)
+ * @property permissions List of permissions to request from the signer
+ * @property packageName Package name of the signer app (default: Amber)
  */
-class AmberSigner(
+@OptIn(ExperimentalCoroutinesApi::class)
+class Nip55Signer(
     private val context: Context,
-    private val permissions: List<Permission> = listOf(Permission.SIGN_EVENT, Permission.GET_PUBLIC_KEY),
-    private val packageName: String = DEFAULT_AMBER_PACKAGE
+    private val permissions: List<Nip55Permission> = listOf(Nip55Permission.SIGN_EVENT, Nip55Permission.GET_PUBLIC_KEY),
+    private val packageName: String = DEFAULT_SIGNER_PACKAGE
 ) : NDKSigner {
 
     private var activityLauncher: ActivityResultLauncher<Intent>? = null
@@ -60,7 +62,7 @@ class AmberSigner(
 
     /**
      * The public key associated with this signer.
-     * This is fetched from Amber on first access.
+     * This is fetched from the signer app on first access.
      */
     override val pubkey: PublicKey
         get() = cachedPubkey ?: throw IllegalStateException(
@@ -68,7 +70,7 @@ class AmberSigner(
         )
 
     /**
-     * Sets the ActivityResultLauncher to use for launching Amber intents.
+     * Sets the ActivityResultLauncher to use for launching signer intents.
      * This must be called before using the signer.
      */
     fun setActivityLauncher(launcher: ActivityResultLauncher<Intent>) {
@@ -76,39 +78,39 @@ class AmberSigner(
     }
 
     /**
-     * Initializes the signer by fetching the public key from Amber.
+     * Initializes the signer by fetching the public key from the signer app.
      * This should be called once during app initialization.
      *
-     * @throws IllegalStateException if Amber is not installed or launcher not set
+     * @throws IllegalStateException if signer app is not installed or launcher not set
      */
     suspend fun initialize() {
-        if (!isAmberInstalled(context, packageName)) {
-            throw IllegalStateException("Amber app is not installed. Package: $packageName")
+        if (!isSignerInstalled(context, packageName)) {
+            throw IllegalStateException("NIP-55 signer app is not installed. Package: $packageName")
         }
 
         if (cachedPubkey == null) {
-            cachedPubkey = getPublicKeyFromAmber()
+            cachedPubkey = getPublicKeyFromSigner()
         }
     }
 
     /**
-     * Signs an unsigned event using the Amber app.
+     * Signs an unsigned event using the NIP-55 signer app.
      *
      * @param event The unsigned event to sign
      * @return The signed NDKEvent
-     * @throws IllegalStateException if signing fails or Amber is not available
+     * @throws IllegalStateException if signing fails or signer is not available
      */
     override suspend fun sign(event: UnsignedEvent): NDKEvent {
         val launcher = activityLauncher
             ?: throw IllegalStateException("ActivityResultLauncher not set. Call setActivityLauncher() first.")
 
-        if (!isAmberInstalled(context, packageName)) {
-            throw IllegalStateException("Amber app is not installed. Package: $packageName")
+        if (!isSignerInstalled(context, packageName)) {
+            throw IllegalStateException("NIP-55 signer app is not installed. Package: $packageName")
         }
 
         // Ensure we have the public key
         if (cachedPubkey == null) {
-            cachedPubkey = getPublicKeyFromAmber()
+            cachedPubkey = getPublicKeyFromSigner()
         }
 
         return suspendCancellableCoroutine { continuation ->
@@ -129,19 +131,19 @@ class AmberSigner(
     }
 
     /**
-     * Handles the result from Amber after signing.
+     * Handles the result from the signer app after signing.
      * This should be called from your Activity's result handler.
      *
      * @param resultCode The result code from the activity
      * @param data The intent data containing the result
      */
-    fun handleAmberResult(resultCode: Int, data: Intent?) {
+    fun handleResult(resultCode: Int, data: Intent?) {
         if (resultCode != android.app.Activity.RESULT_OK || data == null) {
             pendingSignRequest?.completeExceptionally(
-                IllegalStateException("Amber signing cancelled or failed")
+                IllegalStateException("Signing cancelled or failed")
             )
             pendingPubkeyRequest?.completeExceptionally(
-                IllegalStateException("Amber public key request cancelled or failed")
+                IllegalStateException("Public key request cancelled or failed")
             )
             pendingSignRequest = null
             pendingPubkeyRequest = null
@@ -168,10 +170,10 @@ class AmberSigner(
             }
             else -> {
                 pendingSignRequest?.completeExceptionally(
-                    IllegalStateException("Invalid response from Amber: no signature or event")
+                    IllegalStateException("Invalid response from signer: no signature or event")
                 )
                 pendingPubkeyRequest?.completeExceptionally(
-                    IllegalStateException("Invalid response from Amber: no pubkey")
+                    IllegalStateException("Invalid response from signer: no pubkey")
                 )
                 pendingSignRequest = null
                 pendingPubkeyRequest = null
@@ -180,9 +182,9 @@ class AmberSigner(
     }
 
     /**
-     * Fetches the public key from Amber.
+     * Fetches the public key from the signer app.
      */
-    private suspend fun getPublicKeyFromAmber(): String {
+    private suspend fun getPublicKeyFromSigner(): String {
         val launcher = activityLauncher
             ?: throw IllegalStateException("ActivityResultLauncher not set. Call setActivityLauncher() first.")
 
@@ -204,7 +206,7 @@ class AmberSigner(
     }
 
     /**
-     * Creates an intent to sign an event via Amber.
+     * Creates an intent to sign an event via the signer app.
      */
     private fun createSignEventIntent(event: UnsignedEvent): Intent {
         val eventJson = serializeEvent(event)
@@ -221,7 +223,7 @@ class AmberSigner(
     }
 
     /**
-     * Creates an intent to get the public key from Amber.
+     * Creates an intent to get the public key from the signer app.
      */
     private fun createGetPublicKeyIntent(): Intent {
         val uri = Uri.parse("nostrsigner:")
@@ -230,12 +232,12 @@ class AmberSigner(
             setPackage(packageName)
             putExtra("type", "get_public_key")
             putExtra("id", generateRequestId())
-            putExtra("permission", Permission.GET_PUBLIC_KEY.value)
+            putExtra("permission", Nip55Permission.GET_PUBLIC_KEY.value)
         }
     }
 
     /**
-     * Serializes an unsigned event to JSON format expected by Amber.
+     * Serializes an unsigned event to JSON format expected by NIP-55 signers.
      */
     private fun serializeEvent(event: UnsignedEvent): String {
         val eventMap = mapOf(
@@ -249,7 +251,7 @@ class AmberSigner(
     }
 
     /**
-     * Parses a signed event JSON from Amber into an NDKEvent.
+     * Parses a signed event JSON from the signer app into an NDKEvent.
      */
     private fun parseSignedEvent(eventJson: String): NDKEvent {
         val eventMap: Map<String, Any> = objectMapper.readValue(eventJson)
@@ -283,7 +285,7 @@ class AmberSigner(
     }
 
     /**
-     * Generates a unique request ID for Amber intents.
+     * Generates a unique request ID for signer intents.
      */
     private fun generateRequestId(): String {
         return System.currentTimeMillis().toString()
@@ -291,18 +293,20 @@ class AmberSigner(
 
     companion object {
         private val objectMapper: ObjectMapper = jacksonObjectMapper()
-        private const val DEFAULT_AMBER_PACKAGE = "com.greenart7c3.nostrsigner"
+
+        /** Default NIP-55 signer package (Amber) */
+        const val DEFAULT_SIGNER_PACKAGE = "com.greenart7c3.nostrsigner"
 
         /**
-         * Checks if the Amber app is installed on the device.
+         * Checks if a NIP-55 signer app is installed on the device.
          *
          * @param context Android context
-         * @param packageName Package name of the Amber app
-         * @return true if Amber is installed, false otherwise
+         * @param packageName Package name of the signer app
+         * @return true if the signer is installed, false otherwise
          */
-        fun isAmberInstalled(
+        fun isSignerInstalled(
             context: Context,
-            packageName: String = DEFAULT_AMBER_PACKAGE
+            packageName: String = DEFAULT_SIGNER_PACKAGE
         ): Boolean {
             return try {
                 context.packageManager.getPackageInfo(packageName, 0)
@@ -313,20 +317,70 @@ class AmberSigner(
         }
 
         /**
-         * Opens the Play Store page for the Amber app.
+         * Returns a list of known NIP-55 signer packages.
+         */
+        fun knownSignerPackages(): List<String> = listOf(
+            "com.greenart7c3.nostrsigner"  // Amber
+        )
+
+        /**
+         * Finds all installed NIP-55 signers on the device.
          *
          * @param context Android context
-         * @param packageName Package name of the Amber app
+         * @return List of package names for installed signers
          */
-        fun openAmberInPlayStore(
+        fun findInstalledSigners(context: Context): List<String> {
+            return knownSignerPackages().filter { isSignerInstalled(context, it) }
+        }
+
+        /**
+         * Opens the Play Store page for a signer app.
+         *
+         * @param context Android context
+         * @param packageName Package name of the signer app
+         */
+        fun openInPlayStore(
             context: Context,
-            packageName: String = DEFAULT_AMBER_PACKAGE
+            packageName: String = DEFAULT_SIGNER_PACKAGE
         ) {
             val intent = Intent(Intent.ACTION_VIEW).apply {
                 data = Uri.parse("https://play.google.com/store/apps/details?id=$packageName")
                 setPackage("com.android.vending")
             }
             context.startActivity(intent)
+        }
+    }
+}
+
+/**
+ * Permissions that can be requested from a NIP-55 signer app.
+ * These permissions control what operations the app can perform.
+ */
+enum class Nip55Permission(val value: String) {
+    /** Permission to sign Nostr events */
+    SIGN_EVENT("sign_event"),
+
+    /** Permission to perform NIP-04 encryption */
+    NIP04_ENCRYPT("nip04_encrypt"),
+
+    /** Permission to perform NIP-04 decryption */
+    NIP04_DECRYPT("nip04_decrypt"),
+
+    /** Permission to perform NIP-44 encryption */
+    NIP44_ENCRYPT("nip44_encrypt"),
+
+    /** Permission to perform NIP-44 decryption */
+    NIP44_DECRYPT("nip44_decrypt"),
+
+    /** Permission to get the public key */
+    GET_PUBLIC_KEY("get_public_key"),
+
+    /** Permission to decrypt zap events (NIP-57) */
+    DECRYPT_ZAP_EVENT("decrypt_zap_event");
+
+    companion object {
+        fun fromValue(value: String): Nip55Permission? {
+            return entries.find { it.value == value }
         }
     }
 }

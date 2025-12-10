@@ -62,6 +62,9 @@ dependencies {
     // Compose runtime (for @Immutable annotation only, no UI dependencies)
     implementation("androidx.compose.runtime:runtime:1.7.6")
 
+    // AndroidX Activity for NIP-55 signer (ActivityResultLauncher support)
+    implementation("androidx.activity:activity-ktx:1.9.3")
+
     // Testing
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
