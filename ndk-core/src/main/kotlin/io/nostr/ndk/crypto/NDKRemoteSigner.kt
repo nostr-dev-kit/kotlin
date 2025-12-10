@@ -81,6 +81,40 @@ class NDKRemoteSigner private constructor(
         private const val KIND_NOSTR_CONNECT = 24133
         private val objectMapper: ObjectMapper = jacksonObjectMapper()
 
+        init {
+            // Register deserializer that creates a deferred signer
+            // The signer requires an NDK instance which isn't available during deserialization
+            NDKSigner.registerDeserializer("NDKRemoteSigner") { data ->
+                val remotePubkey = data["remotePubkey"] as? String ?: return@registerDeserializer null
+                val relayUrls = (data["relayUrls"] as? List<*>)?.mapNotNull { it as? String }
+                    ?: return@registerDeserializer null
+
+                val localPrivateKeyHex = data["localPrivateKeyHex"] as? String
+                val localPublicKeyHex = data["localPublicKeyHex"] as? String
+                    ?: return@registerDeserializer null
+
+                val localKeyPair = if (!localPrivateKeyHex.isNullOrEmpty()) {
+                    NDKKeyPair.fromPrivateKey(localPrivateKeyHex)
+                } else {
+                    NDKKeyPair.fromPublicKey(localPublicKeyHex)
+                }
+
+                val secret = (data["secret"] as? String)?.takeIf { it.isNotEmpty() }
+                val timeoutMs = (data["timeoutMs"] as? Number)?.toLong() ?: 30000L
+                val userPubkey = data["userPubkey"] as? String
+
+                // Return a deferred signer that will be initialized with NDK later
+                NDKDeferredRemoteSigner(
+                    remotePubkey = remotePubkey,
+                    relayUrls = relayUrls,
+                    localKeyPair = localKeyPair,
+                    secret = secret,
+                    timeoutMs = timeoutMs,
+                    userPubkey = userPubkey
+                )
+            }
+        }
+
         /**
          * Creates an NDKRemoteSigner from a bunker:// URL.
          *
@@ -152,10 +186,19 @@ class NDKRemoteSigner private constructor(
     }
 
     override fun serialize(): ByteArray {
-        throw UnsupportedOperationException(
-            "NDKRemoteSigner cannot be serialized - it requires NDK instance. " +
-            "Store the bunker URL or remote pubkey and relay URLs, then recreate the signer on app restart."
+        val data = mapOf(
+            "type" to "NDKRemoteSigner",
+            "data" to mapOf(
+                "remotePubkey" to remotePubkey,
+                "relayUrls" to relayUrls,
+                "localPrivateKeyHex" to (localKeyPair.privateKeyHex ?: ""),
+                "localPublicKeyHex" to localKeyPair.pubkeyHex,
+                "secret" to (secret ?: ""),
+                "timeoutMs" to timeoutMs,
+                "userPubkey" to (_pubkey ?: "")
+            )
         )
+        return objectMapper.writeValueAsBytes(data)
     }
 
     /**

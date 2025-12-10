@@ -196,7 +196,12 @@ class NDK(
 
         for (pubkey in storage.listAccounts()) {
             val signerData = storage.loadSigner(pubkey) ?: continue
-            val signer = NDKSigner.deserialize(signerData) ?: continue
+            var signer = NDKSigner.deserialize(signerData) ?: continue
+
+            // Handle deferred signers that need NDK instance
+            if (signer is io.nostr.ndk.crypto.NDKDeferredRemoteSigner) {
+                signer = signer.initialize(this)
+            }
 
             val currentUser = NDKCurrentUser(signer, this)
             restoredAccounts.add(currentUser)
