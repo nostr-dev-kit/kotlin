@@ -4,12 +4,16 @@ import io.nostr.ndk.NDK
 import io.nostr.ndk.models.NDKEvent
 import io.nostr.ndk.models.NDKFilter
 import io.nostr.ndk.relay.NDKRelay
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
 /**
  * Represents an active subscription to Nostr events matching a set of filters.
@@ -50,6 +54,18 @@ class NDKSubscription(
      * The map contains relay URLs as keys and true/false indicating EOSE received.
      */
     val eosePerRelay: StateFlow<Map<String, Boolean>> = _eosePerRelay.asStateFlow()
+
+    // StateFlow tracking cache EOSE status
+    private val _cacheEose = MutableStateFlow(false)
+
+    /**
+     * StateFlow tracking whether cached events have been loaded.
+     * True once all cached events matching the filters have been emitted.
+     */
+    val cacheEose: StateFlow<Boolean> = _cacheEose.asStateFlow()
+
+    // Coroutine scope for cache operations
+    private val cacheScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     // Set of relays this subscription is active on
     private var activeRelays: Set<NDKRelay> = emptySet()
@@ -98,5 +114,41 @@ class NDKSubscription(
     internal fun markEose(relay: NDKRelay) {
         val currentMap = _eosePerRelay.value
         _eosePerRelay.value = currentMap + (relay.url to true)
+    }
+
+    /**
+     * Loads cached events matching the subscription filters.
+     * Emits all matching cached events immediately, then marks cacheEose as true.
+     * This is called automatically when starting a subscription with a cache.
+     */
+    internal fun loadFromCache() {
+        val cache = ndk?.cacheAdapter ?: run {
+            _cacheEose.value = true
+            return
+        }
+
+        cacheScope.launch {
+            try {
+                // Query cache for each filter
+                filters.forEach { filter ->
+                    // Remove temporal constraints for cache query to get more matches
+                    cache.query(filter).collect { event ->
+                        _events.tryEmit(event)
+                    }
+                }
+            } finally {
+                _cacheEose.value = true
+            }
+        }
+    }
+
+    /**
+     * Emits a single event directly (for cache events that don't need relay tracking).
+     * This is used internally to emit cached events.
+     *
+     * @param event The event to emit
+     */
+    internal fun emitCached(event: NDKEvent) {
+        _events.tryEmit(event)
     }
 }

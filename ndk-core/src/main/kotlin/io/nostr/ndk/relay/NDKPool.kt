@@ -139,24 +139,29 @@ class NDKPool(private val ndk: NDK) {
     }
 
     /**
-     * Connects to all relays in the pool.
+     * Connects to all relays in the pool and waits for at least one to connect.
      *
      * @param timeoutMs Maximum time to wait for connections
      */
     suspend fun connect(timeoutMs: Long = 5000) {
-        withTimeoutOrNull(timeoutMs) {
-            coroutineScope {
-                relays.values.forEach { relay ->
-                    launch {
-                        try {
-                            relay.connect()
-                        } catch (e: Exception) {
-                            // Log but don't fail the entire operation
-                        }
-                    }
+        // Start connections for any relays not already connecting
+        relays.values.forEach { relay ->
+            scope.launch {
+                try {
+                    relay.connect()
+                } catch (e: Exception) {
+                    // Log but don't fail
                 }
             }
         }
+
+        // Wait for at least one relay to connect (with timeout)
+        withTimeoutOrNull(timeoutMs) {
+            connectedRelays.first { it.isNotEmpty() }
+        }
+
+        // Ensure connected relays is up to date
+        updateConnectedRelays()
     }
 
     /**

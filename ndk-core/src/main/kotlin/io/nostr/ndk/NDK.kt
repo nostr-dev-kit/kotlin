@@ -1,7 +1,9 @@
 package io.nostr.ndk
 
+import io.nostr.ndk.cache.NDKCacheAdapter
 import io.nostr.ndk.crypto.NDKSigner
 import io.nostr.ndk.models.NDKFilter
+import io.nostr.ndk.outbox.NDKOutboxTracker
 import io.nostr.ndk.relay.NDKPool
 import io.nostr.ndk.subscription.NDKSubscription
 import io.nostr.ndk.subscription.NDKSubscriptionManager
@@ -16,7 +18,8 @@ import io.nostr.ndk.subscription.NDKSubscriptionManager
  * ```kotlin
  * val ndk = NDK(
  *     explicitRelayUrls = setOf("wss://relay.damus.io", "wss://nos.lol"),
- *     signer = NDKPrivateKeySigner(keyPair)
+ *     signer = NDKPrivateKeySigner(keyPair),
+ *     cacheAdapter = InMemoryCacheAdapter() // Optional persistent cache
  * )
  *
  * ndk.connect()
@@ -29,10 +32,12 @@ import io.nostr.ndk.subscription.NDKSubscriptionManager
  *
  * @param explicitRelayUrls Set of relay URLs to connect to
  * @param signer Optional signer for signing and publishing events
+ * @param cacheAdapter Optional cache adapter for event persistence
  */
 class NDK(
     val explicitRelayUrls: Set<String> = emptySet(),
-    val signer: NDKSigner? = null
+    val signer: NDKSigner? = null,
+    val cacheAdapter: NDKCacheAdapter? = null
 ) {
     /**
      * Lazy initialized relay pool.
@@ -45,6 +50,12 @@ class NDK(
      * The manager coordinates all subscriptions and dispatches events.
      */
     internal val subscriptionManager: NDKSubscriptionManager by lazy { NDKSubscriptionManager(this) }
+
+    /**
+     * Lazy initialized outbox tracker.
+     * Manages relay lists (NIP-65) and provides outbox model capabilities.
+     */
+    val outboxTracker: NDKOutboxTracker by lazy { NDKOutboxTracker(this) }
 
     /**
      * Connects to all explicit relays.
@@ -73,12 +84,21 @@ class NDK(
      * Creates a subscription with multiple filters.
      * Events matching any of the filters will be emitted.
      *
+     * If a cache adapter is configured, cached events are emitted first,
+     * followed by events from relays (cache-first strategy).
+     *
      * @param filters List of filters to match events against
      * @return A new subscription that will emit matching events
      */
     fun subscribe(filters: List<NDKFilter>): NDKSubscription {
         val subscription = subscriptionManager.subscribe(filters)
+
+        // Load cached events first (cache-first strategy)
+        subscription.loadFromCache()
+
+        // Then subscribe to relays for new events
         subscription.start(pool.connectedRelays.value)
+
         return subscription
     }
 }

@@ -6,9 +6,13 @@ import io.nostr.ndk.models.NDKEvent
 import io.nostr.ndk.models.NDKFilter
 import io.nostr.ndk.models.Timestamp
 import io.nostr.ndk.relay.NDKRelay
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
 import java.util.UUID
 
@@ -24,6 +28,9 @@ import java.util.UUID
  * @property ndk Reference to the parent NDK instance
  */
 internal class NDKSubscriptionManager(private val ndk: NDK) {
+    // Coroutine scope for cache operations
+    private val cacheScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
     // Active subscriptions indexed by subscription ID
     private val subscriptions = ConcurrentHashMap<String, NDKSubscription>()
 
@@ -75,8 +82,9 @@ internal class NDKSubscriptionManager(private val ndk: NDK) {
      *
      * This is the single dispatch point for all events. It:
      * 1. Checks if the event has been seen before (deduplication)
-     * 2. Emits to the global allEvents flow
-     * 3. Routes to all subscriptions with matching filters
+     * 2. Stores the event in the cache (if configured)
+     * 3. Emits to the global allEvents flow
+     * 4. Routes to all subscriptions with matching filters
      *
      * @param event The event to dispatch
      * @param relay The relay that sent the event
@@ -92,6 +100,13 @@ internal class NDKSubscriptionManager(private val ndk: NDK) {
 
         // Mark as seen
         seenEvents.put(dedupKey, System.currentTimeMillis() / 1000)
+
+        // Store in cache (non-blocking, fire and forget)
+        ndk.cacheAdapter?.let { cache ->
+            cacheScope.launch {
+                cache.store(event)
+            }
+        }
 
         // Emit to global event stream
         _allEvents.tryEmit(event to relay)
