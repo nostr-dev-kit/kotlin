@@ -51,6 +51,9 @@ dependencies {
     implementation("com.goterl:lazysodium-android:5.2.0")
     implementation("net.java.dev.jna:jna:5.14.0@aar")
 
+    // Compose runtime (for @Immutable annotation only, no UI dependencies)
+    implementation("androidx.compose.runtime:runtime:1.7.6")
+
     // Testing
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")

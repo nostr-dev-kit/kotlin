@@ -1,5 +1,6 @@
 package io.nostr.ndk.models
 
+import androidx.compose.runtime.Immutable
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
@@ -17,6 +18,7 @@ import java.security.MessageDigest
  * @property content Event content (text or JSON)
  * @property sig Schnorr signature (64-byte hex), null for unsigned events
  */
+@Immutable
 data class NDKEvent(
     val id: EventId,
     val pubkey: PublicKey,

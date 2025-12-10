@@ -1,5 +1,7 @@
 package io.nostr.ndk.models
 
+import androidx.compose.runtime.Immutable
+
 /**
  * Type-safe representation of a Nostr event tag.
  *
@@ -8,6 +10,7 @@ package io.nostr.ndk.models
  *
  * Example: ["e", "event_id", "relay_url", "marker"]
  */
+@Immutable
 data class NDKTag(
     val name: String,
     val values: List<String>
