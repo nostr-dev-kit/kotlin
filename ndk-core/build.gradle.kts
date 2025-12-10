@@ -39,13 +39,17 @@ dependencies {
 
     // WebSocket
     implementation("com.squareup.okhttp3:okhttp:5.0.0-alpha.14")
+    implementation("com.squareup.okhttp3:okhttp-coroutines:5.0.0-alpha.14")
 
     // JSON
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.17.0")
     implementation("com.fasterxml.jackson.core:jackson-databind:2.17.0")
 
-    // Crypto
+    // Crypto - secp256k1 for Schnorr signatures
     implementation("fr.acinq.secp256k1:secp256k1-kmp-jvm:0.21.0")
+    // Crypto - NIP-44 encryption (ChaCha20-Poly1305)
+    implementation("com.goterl:lazysodium-android:5.2.0")
+    implementation("net.java.dev.jna:jna:5.14.0@aar")
 
     // Testing
     testImplementation("junit:junit:4.13.2")
