@@ -89,6 +89,13 @@ class NDKRemoteSigner(
         isConnected = true
     }
 
+    override fun serialize(): ByteArray {
+        throw UnsupportedOperationException(
+            "NDKRemoteSigner cannot be serialized - it requires NDK instance. " +
+            "Store the remote pubkey and relay URLs, then recreate the signer on app restart."
+        )
+    }
+
     /**
      * Signs an unsigned event by delegating to the remote signer.
      *

@@ -89,25 +89,39 @@ class NDKPrivateKeySigner(val keyPair: NDKKeyPair) : NDKSigner {
         return signatureBytes.toHex()
     }
 
+    override fun serialize(): ByteArray {
+        val data = mapOf(
+            "type" to SIGNER_TYPE,
+            "data" to mapOf(
+                "privateKey" to keyPair.privateKeyHex
+            )
+        )
+        return objectMapper.writeValueAsBytes(data)
+    }
+
     companion object {
+        private const val SIGNER_TYPE = "NDKPrivateKeySigner"
         private val secp256k1 = Secp256k1.get()
         private val objectMapper: ObjectMapper = jacksonObjectMapper()
+
+        init {
+            // Register deserializer
+            NDKSigner.registerDeserializer(SIGNER_TYPE) { data ->
+                val privateKeyHex = data["privateKey"] as? String ?: return@registerDeserializer null
+                val keyPair = NDKKeyPair.fromPrivateKey(privateKeyHex)
+                NDKPrivateKeySigner(keyPair)
+            }
+        }
     }
-}
 
-/**
- * Converts a byte array to a hex string.
- */
-private fun ByteArray.toHex(): String {
-    return joinToString("") { "%02x".format(it) }
-}
+    private fun ByteArray.toHex(): String {
+        return joinToString("") { "%02x".format(it) }
+    }
 
-/**
- * Converts a hex string to a byte array.
- */
-private fun String.hexToBytes(): ByteArray {
-    require(length % 2 == 0) { "Hex string must have even length" }
-    return chunked(2)
-        .map { it.toInt(16).toByte() }
-        .toByteArray()
+    private fun String.hexToBytes(): ByteArray {
+        require(length % 2 == 0) { "Hex string must have even length" }
+        return chunked(2)
+            .map { it.toInt(16).toByte() }
+            .toByteArray()
+    }
 }

@@ -130,6 +130,13 @@ class Nip55Signer(
         }
     }
 
+    override fun serialize(): ByteArray {
+        throw UnsupportedOperationException(
+            "Nip55Signer cannot be serialized - it requires Android Context. " +
+            "Store the public key and recreate the signer on app restart."
+        )
+    }
+
     /**
      * Handles the result from the signer app after signing.
      * This should be called from your Activity's result handler.

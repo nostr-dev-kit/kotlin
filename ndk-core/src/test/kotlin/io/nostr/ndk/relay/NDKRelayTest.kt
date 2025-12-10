@@ -170,6 +170,8 @@ class NDKRelayTest {
                     sig = "c".repeat(128)
                 )
             }
+
+            override fun serialize(): ByteArray = ByteArray(0)
         }
 
         val ndk = NDK(signer = mockSigner)
@@ -200,6 +202,8 @@ class NDKRelayTest {
                     sig = "c".repeat(128)
                 )
             }
+
+            override fun serialize(): ByteArray = ByteArray(0)
         }
 
         val ndk = NDK(signer = mockSigner)
@@ -250,6 +254,8 @@ class NDKRelayTest {
                     sig = "c".repeat(128)
                 )
             }
+
+            override fun serialize(): ByteArray = ByteArray(0)
         }
 
         val ndk = NDK(signer = mockSigner)
