@@ -5,7 +5,7 @@ plugins {
 
 android {
     namespace = "io.nostr.ndk"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         minSdk = 26
@@ -48,8 +48,9 @@ dependencies {
     // Crypto - secp256k1 for Schnorr signatures
     implementation("fr.acinq.secp256k1:secp256k1-kmp-jvm:0.21.0")
     // Crypto - NIP-44 encryption (ChaCha20-Poly1305)
-    implementation("com.goterl:lazysodium-android:5.2.0")
-    implementation("net.java.dev.jna:jna:5.14.0@aar")
+    implementation("com.goterl:lazysodium-android:5.2.0") {
+        exclude(group = "net.java.dev.jna", module = "jna")
+    }
 
     // Compose runtime (for @Immutable annotation only, no UI dependencies)
     implementation("androidx.compose.runtime:runtime:1.7.6")
