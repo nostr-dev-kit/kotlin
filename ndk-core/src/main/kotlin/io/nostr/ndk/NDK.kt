@@ -108,6 +108,9 @@ class NDK(
         _accounts.update { it + currentUser }
         _currentUser.value = currentUser
 
+        // Start session data subscription
+        currentUser.startSessionSubscription()
+
         // Persist if storage available
         accountStorage?.saveSigner(pubkey, signer.serialize())
 
@@ -130,6 +133,9 @@ class NDK(
      * @param pubkey The pubkey of the account to logout
      */
     suspend fun logout(pubkey: PublicKey) {
+        val account = _accounts.value.find { it.pubkey == pubkey }
+        account?.stopSessionSubscription()
+
         _accounts.update { accounts -> accounts.filter { it.pubkey != pubkey } }
 
         // If current user was logged out, clear or switch
@@ -175,6 +181,9 @@ class NDK(
 
         _accounts.value = restoredAccounts
         _currentUser.value = restoredAccounts.firstOrNull()
+
+        // Start session subscription for the current user
+        _currentUser.value?.startSessionSubscription()
 
         return restoredAccounts
     }

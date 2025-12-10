@@ -4,14 +4,21 @@ import io.nostr.ndk.NDK
 import io.nostr.ndk.crypto.NDKSigner
 import io.nostr.ndk.crypto.UnsignedEvent
 import io.nostr.ndk.models.NDKEvent
+import io.nostr.ndk.models.NDKFilter
 import io.nostr.ndk.models.PublicKey
 import io.nostr.ndk.nips.KIND_CONTACT_LIST
 import io.nostr.ndk.nips.followedPubkeys
 import io.nostr.ndk.outbox.RelayList
+import io.nostr.ndk.subscription.NDKSubscription
 import io.nostr.ndk.user.NDKUser
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
 /**
  * Represents the current logged-in user.
@@ -50,6 +57,15 @@ class NDKCurrentUser(
     private val _mutes = MutableStateFlow(MuteList.empty(pubkey))
     private val _relayList = MutableStateFlow<RelayList?>(null)
     private val _blockedRelays = MutableStateFlow(BlockedRelayList.empty(pubkey))
+
+    /**
+     * Subscription for session data (follows, mutes, relays, blocked relays).
+     */
+    var sessionSubscription: NDKSubscription? = null
+        private set
+
+    private var sessionJob: Job? = null
+    private var scope: CoroutineScope? = null
 
     /**
      * The pubkeys this user follows (from kind 3 contact list).
@@ -121,6 +137,48 @@ class NDKCurrentUser(
         blockedRelayListTimestamp = event.createdAt
 
         _blockedRelays.value = BlockedRelayList.fromEvent(event)
+    }
+
+    /**
+     * Starts the session data subscription.
+     * Called automatically by NDK.login().
+     */
+    fun startSessionSubscription() {
+        if (sessionSubscription != null) return
+
+        val filter = NDKFilter(
+            kinds = setOf(
+                KIND_CONTACT_LIST,
+                KIND_SESSION_MUTE_LIST,
+                KIND_SESSION_RELAY_LIST,
+                KIND_SESSION_BLOCKED_RELAY_LIST
+            ),
+            authors = setOf(pubkey)
+        )
+
+        sessionSubscription = ndk.subscribe(filter)
+
+        // Create a new scope for this subscription
+        scope = CoroutineScope(Dispatchers.Default)
+
+        // Collect events and update session data
+        sessionJob = scope?.launch {
+            sessionSubscription?.events?.collect { event ->
+                handleEvent(event)
+            }
+        }
+    }
+
+    /**
+     * Stops the session data subscription.
+     * Called automatically by NDK.logout().
+     */
+    fun stopSessionSubscription() {
+        sessionJob?.cancel()
+        sessionJob = null
+        sessionSubscription = null
+        scope?.cancel()
+        scope = null
     }
 
     override fun toString(): String {
