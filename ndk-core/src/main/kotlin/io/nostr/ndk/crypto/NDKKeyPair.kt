@@ -26,10 +26,10 @@ data class NDKKeyPair(
 
     /**
      * Returns the npub (Bech32-encoded public key).
-     * For now, returns hex until Bech32 is implemented in Task 5.
+     * Currently returns hex - Bech32 encoding to be added.
      */
     val npub: String
-        get() = pubkeyHex  // TODO: Task 5 - Implement Bech32 encoding
+        get() = pubkeyHex
 
     companion object {
         private val secp256k1 = Secp256k1.get()
