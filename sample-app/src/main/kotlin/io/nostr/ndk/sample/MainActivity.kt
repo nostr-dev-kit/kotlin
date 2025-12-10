@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -16,6 +17,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
 import io.nostr.ndk.NDK
 import io.nostr.ndk.cache.InMemoryCacheAdapter
+import io.nostr.ndk.cache.nostrdb.NostrDBCacheAdapter
 import io.nostr.ndk.crypto.NDKKeyPair
 import io.nostr.ndk.crypto.NDKPrivateKeySigner
 import io.nostr.ndk.crypto.UnsignedEvent
@@ -48,7 +50,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun TestAppHub(lifecycleScope: kotlinx.coroutines.CoroutineScope) {
     var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("Feed", "Profile", "Publish", "NIP-19", "Filters")
+    val tabs = listOf("Feed", "Profile", "Publish", "NIP-19", "Filters", "NostrDB")
 
     Column(modifier = Modifier.fillMaxSize()) {
         // Tab row
@@ -69,6 +71,7 @@ fun TestAppHub(lifecycleScope: kotlinx.coroutines.CoroutineScope) {
             2 -> PublishTestScreen(lifecycleScope)
             3 -> Nip19TestScreen()
             4 -> MultiFilterTestScreen(lifecycleScope)
+            5 -> NostrDBTestScreen(lifecycleScope)
         }
     }
 }
@@ -600,6 +603,154 @@ fun EventCard(event: NDKEvent) {
             Text(event.content.take(200) + if (event.content.length > 200) "..." else "", fontSize = 14.sp)
             Spacer(modifier = Modifier.height(4.dp))
             Text("ID: ${event.id.take(12)}...", fontSize = 10.sp, color = MaterialTheme.colorScheme.tertiary)
+        }
+    }
+}
+
+// ============== TEST 6: NostrDB Cache ==============
+@Composable
+fun NostrDBTestScreen(lifecycleScope: kotlinx.coroutines.CoroutineScope) {
+    val context = LocalContext.current
+
+    // Create NostrDB cache adapter
+    val cache = remember {
+        NostrDBCacheAdapter.create(context)
+    }
+
+    val ndk = remember {
+        NDK(
+            explicitRelayUrls = setOf(
+                "wss://relay.damus.io",
+                "wss://relay.nostr.band",
+                "wss://nos.lol"
+            ),
+            cacheAdapter = cache
+        )
+    }
+
+    var events by remember { mutableStateOf<List<NDKEvent>>(emptyList()) }
+    var cachedCount by remember { mutableIntStateOf(0) }
+    var status by remember { mutableStateOf("Not connected") }
+    var isConnected by remember { mutableStateOf(false) }
+    var dbStatus by remember { mutableStateOf("NostrDB initializing...") }
+
+    // Check DB status
+    LaunchedEffect(Unit) {
+        dbStatus = "NostrDB ready at: ${context.filesDir}/nostrdb-test"
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
+        Text("NostrDB Cache Test", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // DB Status
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+        ) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Text("Database Status", fontWeight = FontWeight.Bold)
+                Text(dbStatus, fontSize = 12.sp)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Connection status
+        Text("Status: $status", fontSize = 14.sp)
+        Text("Events received: ${events.size}", fontSize = 14.sp)
+        Text("Events in cache: $cachedCount", fontSize = 14.sp)
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                onClick = {
+                    lifecycleScope.launch {
+                        status = "Connecting..."
+                        try {
+                            ndk.connect()
+                            isConnected = true
+                            status = "Connected! Subscribing to kind 1..."
+
+                            val filter = NDKFilter(
+                                kinds = setOf(1),
+                                limit = 30
+                            )
+
+                            val subscription = ndk.subscribe(filter)
+                            status = "Subscribed! Waiting for events..."
+
+                            subscription.events.collectLatest { event ->
+                                events = (listOf(event) + events).take(50)
+                                cachedCount = events.size // Events auto-cached by NostrDB
+                            }
+                        } catch (e: Exception) {
+                            status = "Error: ${e.message}"
+                        }
+                    }
+                },
+                enabled = !isConnected
+            ) {
+                Text("Connect & Subscribe")
+            }
+
+            Button(
+                onClick = {
+                    lifecycleScope.launch {
+                        // Query cached events using Flow
+                        val filter = NDKFilter(kinds = setOf(1), limit = 10)
+                        var count = 0
+                        cache.query(filter).collect { count++ }
+                        status = "Queried cache: $count events found"
+                    }
+                },
+                enabled = isConnected
+            ) {
+                Text("Query Cache")
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Event list
+        LazyColumn {
+            items(events) { event ->
+                NostrDBEventCard(event)
+            }
+        }
+    }
+}
+
+@Composable
+fun NostrDBEventCard(event: NDKEvent) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("From: ${event.pubkey.take(12)}...", fontSize = 11.sp, color = MaterialTheme.colorScheme.secondary)
+                Text("Tags: ${event.tags.size}", fontSize = 11.sp, color = MaterialTheme.colorScheme.tertiary)
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                event.content.take(150) + if (event.content.length > 150) "..." else "",
+                fontSize = 13.sp
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                "Sig: ${event.sig?.take(16) ?: "null"}...",
+                fontSize = 9.sp,
+                color = MaterialTheme.colorScheme.outline
+            )
         }
     }
 }

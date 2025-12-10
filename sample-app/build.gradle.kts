@@ -42,6 +42,8 @@ android {
 dependencies {
     // NDK Core
     implementation(project(":ndk-core"))
+    // NostrDB cache adapter
+    implementation(project(":ndk-nostrdb"))
 
     // Kotlin
     implementation("org.jetbrains.kotlin:kotlin-stdlib:2.1.0")

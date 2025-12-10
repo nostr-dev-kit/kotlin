@@ -101,4 +101,30 @@ class NDK(
 
         return subscription
     }
+
+    /**
+     * Triggers reconnection for all disconnected relays.
+     * Useful when network connectivity is restored.
+     *
+     * @param ignoreDelay If true, bypasses exponential backoff delays
+     */
+    fun reconnect(ignoreDelay: Boolean = false) {
+        pool.reconnectAll(ignoreDelay)
+    }
+
+    /**
+     * Closes the NDK instance and releases all resources.
+     *
+     * This method:
+     * - Disconnects from all relays
+     * - Cancels all reconnection attempts
+     * - Clears all subscriptions
+     * - Releases all coroutine scopes
+     *
+     * After calling close(), this NDK instance should not be used.
+     * Create a new instance if needed.
+     */
+    fun close() {
+        pool.close()
+    }
 }

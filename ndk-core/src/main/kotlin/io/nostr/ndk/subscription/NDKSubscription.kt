@@ -7,6 +7,7 @@ import io.nostr.ndk.relay.NDKRelay
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -31,13 +32,25 @@ class NDKSubscription(
     val filters: List<NDKFilter>,
     private val ndk: NDK?
 ) {
+    companion object {
+        /**
+         * Default replay buffer size for event streams.
+         * Keeps the last 100 events for late subscribers.
+         */
+        const val DEFAULT_REPLAY_SIZE = 100
+
+        /**
+         * Extra buffer capacity for handling burst traffic.
+         */
+        const val DEFAULT_EXTRA_BUFFER = 500
+    }
+
     // Internal MutableSharedFlow for emitting events
-    // Using replay = Int.MAX_VALUE to cache all events for late subscribers in tests
-    // In production, this would be configured differently
+    // Using bounded replay buffer to prevent memory issues
     private val _events = MutableSharedFlow<NDKEvent>(
-        replay = Int.MAX_VALUE,
-        extraBufferCapacity = 0,
-        onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST
+        replay = DEFAULT_REPLAY_SIZE,
+        extraBufferCapacity = DEFAULT_EXTRA_BUFFER,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
     )
 
     /**

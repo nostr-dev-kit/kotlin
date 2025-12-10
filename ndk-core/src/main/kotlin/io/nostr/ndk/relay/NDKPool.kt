@@ -117,13 +117,26 @@ class NDKPool(private val ndk: NDK) {
             // Cancel temporary relay job if exists
             temporaryRelayJobs.remove(normalizedUrl)?.cancel()
 
+            // Close the relay (cleans up all resources including reconnection jobs)
+            relay.close()
+
             scope.launch {
-                relay.disconnect()
                 _events.emit(PoolEvent.RelayRemoved(normalizedUrl))
             }
 
             updateAvailableRelays()
             updateConnectedRelays()
+        }
+    }
+
+    /**
+     * Triggers reconnection for all disconnected relays.
+     *
+     * @param ignoreDelay If true, bypasses backoff delays
+     */
+    fun reconnectAll(ignoreDelay: Boolean = false) {
+        relays.values.forEach { relay ->
+            relay.reconnectIfDisconnected(ignoreDelay)
         }
     }
 
@@ -183,6 +196,7 @@ class NDKPool(private val ndk: NDK) {
 
     /**
      * Adds a temporary relay that will be auto-removed after the specified idle timeout.
+     * Temporary relays do not auto-reconnect if disconnected.
      *
      * @param url The relay URL (will be normalized)
      * @param idleTimeoutMs Time in milliseconds before auto-removal
@@ -191,6 +205,9 @@ class NDKPool(private val ndk: NDK) {
     fun addTemporaryRelay(url: String, idleTimeoutMs: Long = 30_000): NDKRelay {
         val relay = addRelay(url, connect = true)
         val normalizedUrl = normalizeUrl(url)
+
+        // Disable auto-reconnect for temporary relays
+        relay.autoReconnect = false
 
         // Cancel existing timeout job if any
         temporaryRelayJobs[normalizedUrl]?.cancel()
@@ -250,12 +267,26 @@ class NDKPool(private val ndk: NDK) {
 
     /**
      * Cleans up resources when the pool is no longer needed.
+     * Closes all relays and cancels all pending jobs.
      */
     fun close() {
+        // Cancel all monitoring jobs
         relayStateJobs.values.forEach { it.cancel() }
         relayStateJobs.clear()
+
+        // Cancel all temporary relay jobs
         temporaryRelayJobs.values.forEach { it.cancel() }
         temporaryRelayJobs.clear()
+
+        // Close all relays (this stops reconnection attempts and cleans up resources)
+        relays.values.forEach { it.close() }
+        relays.clear()
+
+        // Update state
+        _availableRelays.value = emptySet()
+        _connectedRelays.value = emptySet()
+
+        // Cancel the pool scope
         scope.cancel()
     }
 }
