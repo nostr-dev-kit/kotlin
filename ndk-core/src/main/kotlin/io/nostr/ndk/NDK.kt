@@ -1,29 +1,40 @@
 package io.nostr.ndk
 
+import io.nostr.ndk.account.NDKAccountStorage
+import io.nostr.ndk.account.NDKCurrentUser
 import io.nostr.ndk.cache.NDKCacheAdapter
 import io.nostr.ndk.crypto.NDKSigner
 import io.nostr.ndk.models.NDKFilter
+import io.nostr.ndk.models.PublicKey
 import io.nostr.ndk.outbox.NDKOutboxTracker
 import io.nostr.ndk.relay.NDKPool
 import io.nostr.ndk.subscription.NDKSubscription
 import io.nostr.ndk.subscription.NDKSubscriptionManager
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 
 /**
  * Main entry point for the Nostr Development Kit (NDK).
  *
- * NDK manages relay connections, subscriptions, and event publishing.
+ * NDK manages relay connections, subscriptions, event publishing, and account management.
  * It provides a streaming-first API where events are delivered via Kotlin Flows.
  *
  * Example usage:
  * ```kotlin
  * val ndk = NDK(
  *     explicitRelayUrls = setOf("wss://relay.damus.io", "wss://nos.lol"),
- *     signer = NDKPrivateKeySigner(keyPair),
- *     cacheAdapter = InMemoryCacheAdapter() // Optional persistent cache
+ *     accountStorage = AndroidAccountStorage(context)
  * )
  *
- * ndk.connect()
+ * // Login and start session
+ * val me = ndk.login(NDKPrivateKeySigner(keyPair))
  *
+ * // Access reactive session data
+ * me.follows.collect { follows -> updateUI(follows) }
+ *
+ * // Subscribe to events
  * val subscription = ndk.subscribe(NDKFilter(kinds = setOf(1), limit = 50))
  * subscription.events.collect { event ->
  *     println("New event: ${event.content}")
@@ -31,13 +42,15 @@ import io.nostr.ndk.subscription.NDKSubscriptionManager
  * ```
  *
  * @param explicitRelayUrls Set of relay URLs to connect to
- * @param signer Optional signer for signing and publishing events
+ * @param signer Optional signer for signing and publishing events (deprecated, use login())
  * @param cacheAdapter Optional cache adapter for event persistence
+ * @param accountStorage Optional storage for persisting account data
  */
 class NDK(
     val explicitRelayUrls: Set<String> = emptySet(),
     val signer: NDKSigner? = null,
-    val cacheAdapter: NDKCacheAdapter? = null
+    val cacheAdapter: NDKCacheAdapter? = null,
+    val accountStorage: NDKAccountStorage? = null
 ) {
     /**
      * Lazy initialized relay pool.
@@ -56,6 +69,115 @@ class NDK(
      * Manages relay lists (NIP-65) and provides outbox model capabilities.
      */
     val outboxTracker: NDKOutboxTracker by lazy { NDKOutboxTracker(this) }
+
+    // Account management
+    private val _currentUser = MutableStateFlow<NDKCurrentUser?>(null)
+    private val _accounts = MutableStateFlow<List<NDKCurrentUser>>(emptyList())
+
+    /**
+     * The currently active user, or null if not logged in.
+     */
+    val currentUser: StateFlow<NDKCurrentUser?> = _currentUser.asStateFlow()
+
+    /**
+     * All logged-in accounts.
+     */
+    val accounts: StateFlow<List<NDKCurrentUser>> = _accounts.asStateFlow()
+
+    /**
+     * Logs in with a signer and creates/activates a session.
+     *
+     * If storage is configured, the account is persisted.
+     * If an account with this pubkey already exists, it becomes the current user.
+     *
+     * @param signer The signer to use for this session
+     * @return The NDKCurrentUser for this session
+     */
+    suspend fun login(signer: NDKSigner): NDKCurrentUser {
+        val pubkey = signer.pubkey
+
+        // Check if account already exists
+        val existing = _accounts.value.find { it.pubkey == pubkey }
+        if (existing != null) {
+            _currentUser.value = existing
+            return existing
+        }
+
+        // Create new current user
+        val currentUser = NDKCurrentUser(signer, this)
+        _accounts.update { it + currentUser }
+        _currentUser.value = currentUser
+
+        // Persist if storage available
+        accountStorage?.saveSigner(pubkey, signer.serialize())
+
+        return currentUser
+    }
+
+    /**
+     * Logs out the current user.
+     *
+     * If storage is configured, the account is removed from storage.
+     */
+    suspend fun logout() {
+        val current = _currentUser.value ?: return
+        logout(current.pubkey)
+    }
+
+    /**
+     * Logs out a specific account by pubkey.
+     *
+     * @param pubkey The pubkey of the account to logout
+     */
+    suspend fun logout(pubkey: PublicKey) {
+        _accounts.update { accounts -> accounts.filter { it.pubkey != pubkey } }
+
+        // If current user was logged out, clear or switch
+        if (_currentUser.value?.pubkey == pubkey) {
+            _currentUser.value = _accounts.value.firstOrNull()
+        }
+
+        // Remove from storage
+        accountStorage?.deleteAccount(pubkey)
+    }
+
+    /**
+     * Switches to a different account.
+     *
+     * @param pubkey The pubkey of the account to switch to
+     * @return true if switch was successful, false if account not found
+     */
+    fun switchAccount(pubkey: PublicKey): Boolean {
+        val account = _accounts.value.find { it.pubkey == pubkey } ?: return false
+        _currentUser.value = account
+        return true
+    }
+
+    /**
+     * Restores accounts from storage.
+     *
+     * Call this on app startup to restore previously logged-in accounts.
+     *
+     * @return List of restored accounts
+     */
+    suspend fun restoreAccounts(): List<NDKCurrentUser> {
+        val storage = accountStorage ?: return emptyList()
+
+        val restoredAccounts = mutableListOf<NDKCurrentUser>()
+
+        for (pubkey in storage.listAccounts()) {
+            val signerData = storage.loadSigner(pubkey) ?: continue
+            val signer = NDKSigner.deserialize(signerData) ?: continue
+
+            val currentUser = NDKCurrentUser(signer, this)
+            restoredAccounts.add(currentUser)
+        }
+
+        _accounts.value = restoredAccounts
+        _currentUser.value = restoredAccounts.firstOrNull()
+
+        return restoredAccounts
+    }
 
     /**
      * Connects to all explicit relays.
