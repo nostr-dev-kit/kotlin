@@ -8,8 +8,8 @@ import io.nostr.ndk.models.PublicKey
  *
  * Implementations include:
  * - NDKPrivateKeySigner: Signs with secp256k1 private key
+ * - NDKRemoteSigner: Remote signing via Nostr Connect (NIP-46)
  * - NDKAmberSigner: Signs using Android Amber app (NIP-55)
- * - NDKBunkerSigner: Remote signing via Nostr Connect (NIP-46)
  */
 interface NDKSigner {
     /**

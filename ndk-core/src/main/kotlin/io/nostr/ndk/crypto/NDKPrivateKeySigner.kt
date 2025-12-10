@@ -13,7 +13,7 @@ import java.security.MessageDigest
  * @property keyPair The keypair containing the private key for signing
  * @throws IllegalArgumentException if the keypair doesn't have a private key
  */
-class NDKPrivateKeySigner(private val keyPair: NDKKeyPair) : NDKSigner {
+class NDKPrivateKeySigner(val keyPair: NDKKeyPair) : NDKSigner {
 
     init {
         require(keyPair.privateKey != null) {

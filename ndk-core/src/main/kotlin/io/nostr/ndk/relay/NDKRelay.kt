@@ -1,9 +1,11 @@
 package io.nostr.ndk.relay
 
 import io.nostr.ndk.NDK
+import io.nostr.ndk.crypto.UnsignedEvent
 import io.nostr.ndk.logging.NDKLogging
 import io.nostr.ndk.models.NDKEvent
 import io.nostr.ndk.models.NDKFilter
+import io.nostr.ndk.models.NDKTag
 import io.nostr.ndk.models.Timestamp
 import io.nostr.ndk.relay.messages.ClientMessage
 import io.nostr.ndk.relay.messages.RelayMessage
@@ -357,9 +359,52 @@ class NDKRelay(
      * @param challenge The authentication challenge from the relay
      */
     internal suspend fun authenticate(challenge: String) {
+        val signer = ndk?.signer
+        if (signer == null) {
+            NDKLogging.w(TAG, "[$url] Cannot authenticate - no signer configured")
+            return
+        }
+
         _state.value = NDKRelayState.AUTHENTICATING
-        // NIP-42 authentication - requires a signed event
-        // For now, just mark as connected after auth required
+        NDKLogging.d(TAG, "[$url] Authenticating with challenge: ${challenge.take(16)}...")
+
+        try {
+            // Create NIP-42 AUTH event (kind 22242)
+            val unsignedEvent = UnsignedEvent(
+                pubkey = signer.pubkey,
+                createdAt = System.currentTimeMillis() / 1000,
+                kind = 22242,
+                tags = listOf(
+                    NDKTag("relay", listOf(url)),
+                    NDKTag("challenge", listOf(challenge))
+                ),
+                content = ""
+            )
+
+            // Sign the event
+            val signedEvent = signer.sign(unsignedEvent)
+            NDKLogging.d(TAG, "[$url] Auth event signed: ${signedEvent.id.take(8)}...")
+
+            // Send AUTH message
+            val ws = webSocket
+            if (ws == null) {
+                NDKLogging.e(TAG, "[$url] Cannot send AUTH - no WebSocket connection")
+                _state.value = NDKRelayState.AUTH_REQUIRED
+                return
+            }
+
+            val authMessage = ClientMessage.Auth(signedEvent)
+            ws.send(authMessage.toJson())
+            NDKLogging.d(TAG, "[$url] AUTH message sent")
+
+            // State will be updated to AUTHENTICATED when we receive OK response
+            // For now, consider ourselves authenticated after sending
+            _state.value = NDKRelayState.AUTHENTICATED
+
+        } catch (e: Exception) {
+            NDKLogging.e(TAG, "[$url] Authentication failed: ${e.message}")
+            _state.value = NDKRelayState.AUTH_REQUIRED
+        }
     }
 
     /**
@@ -385,8 +430,17 @@ class NDKRelay(
                     NDKLogging.d(TAG, "[$url] NOTICE: ${message.message}")
                 }
                 is RelayMessage.Auth -> {
-                    NDKLogging.d(TAG, "[$url] AUTH required")
+                    NDKLogging.d(TAG, "[$url] AUTH required: ${message.challenge.take(16)}...")
                     _state.value = NDKRelayState.AUTH_REQUIRED
+
+                    // Automatically attempt authentication if signer is available
+                    if (ndk?.signer != null) {
+                        scope.launch {
+                            authenticate(message.challenge)
+                        }
+                    } else {
+                        NDKLogging.w(TAG, "[$url] Cannot auto-authenticate - no signer configured")
+                    }
                 }
                 is RelayMessage.Closed -> {
                     NDKLogging.d(TAG, "[$url] CLOSED: ${message.subscriptionId} - ${message.message}")
