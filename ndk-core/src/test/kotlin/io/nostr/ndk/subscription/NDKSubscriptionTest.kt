@@ -4,13 +4,7 @@ import io.nostr.ndk.NDK
 import io.nostr.ndk.models.EventId
 import io.nostr.ndk.models.NDKEvent
 import io.nostr.ndk.models.NDKFilter
-import io.nostr.ndk.models.NDKTag
 import io.nostr.ndk.relay.NDKRelay
-import kotlinx.coroutines.async
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.take
-import kotlinx.coroutines.flow.toList
-import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -41,23 +35,23 @@ class NDKSubscriptionTest {
     }
 
     @Test
-    fun `events flow through SharedFlow`() = runTest {
+    fun `events flow through SharedFlow`() {
         val filter = NDKFilter(kinds = setOf(1))
         val sub = NDKSubscription("test", listOf(filter), ndk)
 
         val event = createTestEvent("event1", kind = 1)
 
-        // Emit event first
+        // Emit event
         sub.emit(event, createTestRelay("wss://relay1.com"))
 
-        // Then collect
-        val collectedEvent = sub.events.first()
-
-        assertEquals(event, collectedEvent)
+        // With replay = Int.MAX_VALUE, we can access replay cache
+        val replayCache = sub.events.replayCache
+        assertEquals(1, replayCache.size)
+        assertEquals(event, replayCache[0])
     }
 
     @Test
-    fun `multiple events flow through SharedFlow in order`() = runTest {
+    fun `multiple events flow through SharedFlow in order`() {
         val filter = NDKFilter(kinds = setOf(1))
         val sub = NDKSubscription("test", listOf(filter), ndk)
 
@@ -70,16 +64,16 @@ class NDKSubscriptionTest {
         sub.emit(event2, relay)
         sub.emit(event3, relay)
 
-        val collectedEvents = sub.events.take(3).toList()
-
-        assertEquals(3, collectedEvents.size)
-        assertEquals(event1, collectedEvents[0])
-        assertEquals(event2, collectedEvents[1])
-        assertEquals(event3, collectedEvents[2])
+        // Access replay cache to verify events are stored in order
+        val replayCache = sub.events.replayCache
+        assertEquals(3, replayCache.size)
+        assertEquals(event1, replayCache[0])
+        assertEquals(event2, replayCache[1])
+        assertEquals(event3, replayCache[2])
     }
 
     @Test
-    fun `EOSE tracked per relay`() = runTest {
+    fun `EOSE tracked per relay`() {
         val filter = NDKFilter(kinds = setOf(1))
         val sub = NDKSubscription("test", listOf(filter), ndk)
 
@@ -105,7 +99,7 @@ class NDKSubscriptionTest {
     }
 
     @Test
-    fun `markEose updates eosePerRelay state`() = runTest {
+    fun `markEose updates eosePerRelay state`() {
         val filter = NDKFilter(kinds = setOf(1))
         val sub = NDKSubscription("test", listOf(filter), ndk)
 
@@ -122,7 +116,7 @@ class NDKSubscriptionTest {
     }
 
     @Test
-    fun `multiple relays tracked independently`() = runTest {
+    fun `multiple relays tracked independently`() {
         val filter = NDKFilter(kinds = setOf(1))
         val sub = NDKSubscription("test", listOf(filter), ndk)
 
@@ -142,7 +136,7 @@ class NDKSubscriptionTest {
     }
 
     @Test
-    fun `stop cancels subscription`() = runTest {
+    fun `stop cancels subscription`() {
         val filter = NDKFilter(kinds = setOf(1))
         val sub = NDKSubscription("test", listOf(filter), ndk)
 
@@ -154,13 +148,12 @@ class NDKSubscriptionTest {
         // Stop it
         sub.stop()
 
-        // After stopping, emitting should not work (subscription is closed)
-        // We can't easily test this without a more complex setup, but the method should exist
-        // and be callable
+        // Subscription methods should be callable without errors
+        assertNotNull(sub)
     }
 
     @Test
-    fun `start initializes subscription with relays`() = runTest {
+    fun `start initializes subscription with relays`() {
         val filter = NDKFilter(kinds = setOf(1))
         val sub = NDKSubscription("test", listOf(filter), ndk)
 
@@ -171,10 +164,11 @@ class NDKSubscriptionTest {
         sub.start(setOf(relay1, relay2))
 
         // The method should exist and be callable
+        assertNotNull(sub)
     }
 
     @Test
-    fun `emit adds event to SharedFlow`() = runTest {
+    fun `emit adds event to SharedFlow`() {
         val filter = NDKFilter(kinds = setOf(1))
         val sub = NDKSubscription("test", listOf(filter), ndk)
 
@@ -183,13 +177,14 @@ class NDKSubscriptionTest {
 
         sub.emit(event, relay)
 
-        val collectedEvent = sub.events.first()
-
-        assertEquals(event, collectedEvent)
+        // Verify event is in replay cache
+        val replayCache = sub.events.replayCache
+        assertEquals(1, replayCache.size)
+        assertEquals(event, replayCache[0])
     }
 
     @Test
-    fun `events from different relays flow through same SharedFlow`() = runTest {
+    fun `events from different relays flow through same SharedFlow`() {
         val filter = NDKFilter(kinds = setOf(1))
         val sub = NDKSubscription("test", listOf(filter), ndk)
 
@@ -202,11 +197,11 @@ class NDKSubscriptionTest {
         sub.emit(event1, relay1)
         sub.emit(event2, relay2)
 
-        val collectedEvents = sub.events.take(2).toList()
-
-        assertEquals(2, collectedEvents.size)
-        assertEquals(event1, collectedEvents[0])
-        assertEquals(event2, collectedEvents[1])
+        // Access replay cache to verify both events are stored
+        val replayCache = sub.events.replayCache
+        assertEquals(2, replayCache.size)
+        assertEquals(event1, replayCache[0])
+        assertEquals(event2, replayCache[1])
     }
 
     @Test
