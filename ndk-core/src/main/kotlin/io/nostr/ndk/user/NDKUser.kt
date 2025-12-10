@@ -40,9 +40,9 @@ import kotlinx.coroutines.flow.map
  * }
  * ```
  */
-class NDKUser(
+open class NDKUser(
     val pubkey: PublicKey,
-    private val ndk: NDK
+    protected val ndk: NDK
 ) {
     private val objectMapper = jacksonObjectMapper()
 
