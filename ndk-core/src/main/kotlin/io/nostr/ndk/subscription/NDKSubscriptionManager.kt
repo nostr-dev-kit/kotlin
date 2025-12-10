@@ -23,13 +23,25 @@ import java.util.UUID
  * - Creates and tracks all active subscriptions
  * - Dispatches incoming events from relays to matching subscriptions
  * - Deduplicates events across subscriptions
+ * - Groups similar subscriptions to reduce relay load
+ * - Provides trust-based signature verification sampling
  * - Provides a global event stream (allEvents) for cross-subscription reactivity
  *
  * @property ndk Reference to the parent NDK instance
+ * @property groupingDelayMs Delay in ms before processing pending subscriptions for grouping
  */
-internal class NDKSubscriptionManager(private val ndk: NDK) {
+internal class NDKSubscriptionManager(
+    private val ndk: NDK,
+    groupingDelayMs: Long = 100
+) {
     // Coroutine scope for cache operations
     private val cacheScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+    // Subscription grouper for combining similar subscriptions
+    internal val grouper = NDKSubscriptionGrouper(ndk, groupingDelayMs)
+
+    // Validation ratio tracker for trust-based signature verification
+    val validationTracker = NDKValidationRatioTracker()
 
     // Active subscriptions indexed by subscription ID
     private val subscriptions = ConcurrentHashMap<String, NDKSubscription>()
@@ -75,6 +87,22 @@ internal class NDKSubscriptionManager(private val ndk: NDK) {
      */
     fun unsubscribe(subscriptionId: String) {
         subscriptions.remove(subscriptionId)?.stop()
+        // Also remove from any grouped subscription
+        grouper.remove(subscriptionId)
+    }
+
+    /**
+     * Enqueues a subscription for potential grouping with similar subscriptions.
+     *
+     * Subscriptions with the same filter fingerprint will be grouped together to
+     * reduce relay load. The grouping happens after a short delay to batch
+     * subscriptions created around the same time.
+     *
+     * @param subscription The subscription to enqueue
+     * @param relays The relays to subscribe on
+     */
+    fun enqueueForGrouping(subscription: NDKSubscription, relays: Set<NDKRelay>) {
+        grouper.enqueue(subscription, relays)
     }
 
     /**
@@ -84,7 +112,8 @@ internal class NDKSubscriptionManager(private val ndk: NDK) {
      * 1. Checks if the event has been seen before (deduplication)
      * 2. Stores the event in the cache (if configured)
      * 3. Emits to the global allEvents flow
-     * 4. Routes to all subscriptions with matching filters
+     * 4. Routes to grouped subscriptions (if subscription ID starts with "group-")
+     * 5. Routes to individual subscriptions with matching filters
      *
      * @param event The event to dispatch
      * @param relay The relay that sent the event
@@ -111,7 +140,12 @@ internal class NDKSubscriptionManager(private val ndk: NDK) {
         // Emit to global event stream
         _allEvents.tryEmit(event to relay)
 
-        // Dispatch to all subscriptions with matching filters
+        // Check if this is a grouped subscription
+        if (subscriptionId.startsWith("group-")) {
+            grouper.dispatchToGroup(event, relay, subscriptionId)
+        }
+
+        // Dispatch to all individual subscriptions with matching filters
         subscriptions.values.forEach { subscription ->
             if (subscription.filters.any { filter -> filter.matches(event) }) {
                 subscription.emit(event, relay)
