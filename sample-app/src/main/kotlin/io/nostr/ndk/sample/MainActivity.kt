@@ -3,7 +3,9 @@ package io.nostr.ndk.sample
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
@@ -32,6 +34,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
 
         setContent {
             MaterialTheme {
@@ -52,7 +55,7 @@ fun TestAppHub(lifecycleScope: kotlinx.coroutines.CoroutineScope) {
     var selectedTab by remember { mutableIntStateOf(0) }
     val tabs = listOf("Feed", "Profile", "Publish", "NIP-19", "Filters", "NostrDB")
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
         // Tab row
         ScrollableTabRow(selectedTabIndex = selectedTab) {
             tabs.forEachIndexed { index, title ->
