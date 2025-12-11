@@ -68,6 +68,7 @@ dependencies {
     // Testing
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+    testImplementation("com.squareup.okhttp3:mockwebserver:5.0.0-alpha.14")
     // secp256k1 JNI bindings for unit tests (includes all platforms)
     testImplementation("fr.acinq.secp256k1:secp256k1-kmp-jni-jvm:0.21.0")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")

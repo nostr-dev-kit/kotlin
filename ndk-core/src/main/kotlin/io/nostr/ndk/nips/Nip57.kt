@@ -6,6 +6,11 @@ import io.nostr.ndk.models.EventId
 import io.nostr.ndk.models.NDKEvent
 import io.nostr.ndk.models.PublicKey
 import io.nostr.ndk.utils.Bech32
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import java.util.concurrent.TimeUnit
 
 /**
  * NIP-57: Lightning Zaps
@@ -302,3 +307,97 @@ val NDKEvent.zapEndpoint: String?
         val zapValue = tagValue("zap") ?: return null
         return resolveLnurlEndpoint(lud16 = zapValue, lud06 = zapValue)
     }
+
+/**
+ * LNURL-pay response data structure.
+ *
+ * Represents the response from a LNURL-pay endpoint as defined in LUD-06.
+ */
+data class LnurlPayResponse(
+    val callback: String,
+    val minSendable: Long,
+    val maxSendable: Long,
+    val metadata: String,
+    val tag: String,
+    val allowsNostr: Boolean?,
+    val nostrPubkey: String?,
+    val commentAllowed: Int?
+)
+
+/**
+ * Result of a LNURL-pay metadata fetch operation.
+ */
+sealed class LnurlPayResult {
+    data class Success(val response: LnurlPayResponse) : LnurlPayResult()
+    data class Error(val message: String) : LnurlPayResult()
+}
+
+private val defaultHttpClient = OkHttpClient.Builder()
+    .connectTimeout(10, TimeUnit.SECONDS)
+    .readTimeout(10, TimeUnit.SECONDS)
+    .build()
+
+/**
+ * Fetches LNURL-pay metadata from a LNURL endpoint.
+ *
+ * @param url The LNURL-pay endpoint URL
+ * @param httpClient Optional HTTP client (defaults to a basic client with 10s timeouts)
+ * @return LnurlPayResult containing the response or error
+ */
+suspend fun fetchLnurlPayMetadata(url: String, httpClient: OkHttpClient = defaultHttpClient): LnurlPayResult = withContext(Dispatchers.IO) {
+    try {
+        val request = Request.Builder()
+            .url(url)
+            .header("Accept", "application/json")
+            .build()
+
+        httpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                return@withContext LnurlPayResult.Error("HTTP ${response.code}: ${response.message}")
+            }
+
+            val body = response.body?.string()
+                ?: return@withContext LnurlPayResult.Error("Empty response body")
+
+            if (body.isBlank()) {
+                return@withContext LnurlPayResult.Error("Empty response body")
+            }
+
+            try {
+                val json: Map<String, Any?> = objectMapper.readValue(body)
+
+                val callback = json["callback"] as? String
+                    ?: return@withContext LnurlPayResult.Error("Missing required field: callback")
+                val minSendable = (json["minSendable"] as? Number)?.toLong()
+                    ?: return@withContext LnurlPayResult.Error("Missing required field: minSendable")
+                val maxSendable = (json["maxSendable"] as? Number)?.toLong()
+                    ?: return@withContext LnurlPayResult.Error("Missing required field: maxSendable")
+                val metadata = json["metadata"] as? String
+                    ?: return@withContext LnurlPayResult.Error("Missing required field: metadata")
+                val tag = json["tag"] as? String
+                    ?: return@withContext LnurlPayResult.Error("Missing required field: tag")
+
+                val allowsNostr = json["allowsNostr"] as? Boolean
+                val nostrPubkey = json["nostrPubkey"] as? String
+                val commentAllowed = (json["commentAllowed"] as? Number)?.toInt()
+
+                LnurlPayResult.Success(
+                    LnurlPayResponse(
+                        callback = callback,
+                        minSendable = minSendable,
+                        maxSendable = maxSendable,
+                        metadata = metadata,
+                        tag = tag,
+                        allowsNostr = allowsNostr,
+                        nostrPubkey = nostrPubkey,
+                        commentAllowed = commentAllowed
+                    )
+                )
+            } catch (e: Exception) {
+                LnurlPayResult.Error("Failed to parse JSON: ${e.message}")
+            }
+        }
+    } catch (e: Exception) {
+        LnurlPayResult.Error(e.message ?: "Unknown error")
+    }
+}
