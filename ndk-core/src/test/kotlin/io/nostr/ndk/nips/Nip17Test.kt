@@ -5,8 +5,11 @@ import io.nostr.ndk.crypto.NDKPrivateKeySigner
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Ignore
 import org.junit.Test
 
 /**
@@ -251,5 +254,62 @@ class Nip17Test {
         val event = signer.sign(unsigned)
 
         assertNull("Should return null when no e tag", event.dmReplyTo)
+    }
+
+    @Ignore("Requires Android runtime for LazySodium")
+    @Test
+    fun `wrapPrivateMessage returns kind 1059 gift wrap`() = runTest {
+        val senderKeyPair = NDKKeyPair.generate()
+        val senderSigner = NDKPrivateKeySigner(senderKeyPair)
+        val recipientKeyPair = NDKKeyPair.generate()
+
+        val unsigned = createPrivateMessage(
+            recipientPubkey = recipientKeyPair.pubkeyHex,
+            content = "Secret message"
+        )
+
+        val giftWrap = wrapPrivateMessage(unsigned, senderSigner, recipientKeyPair.pubkeyHex)
+
+        assertEquals("Should create kind 1059 gift wrap", KIND_GIFT_WRAP, giftWrap.kind)
+        assertNotNull("Gift wrap should be signed", giftWrap.sig)
+        assertNotEquals("Gift wrap should use random key, not sender key", senderKeyPair.pubkeyHex, giftWrap.pubkey)
+        assertTrue("Gift wrap should have encrypted content", giftWrap.content.isNotEmpty())
+
+        // Verify p tag with recipient
+        val pTags = giftWrap.tagsWithName("p")
+        assertEquals("Gift wrap should have exactly one p tag", 1, pTags.size)
+        assertEquals("p tag should contain recipient pubkey", recipientKeyPair.pubkeyHex, pTags[0].values[0])
+    }
+
+    @Ignore("Requires Android runtime for LazySodium")
+    @Test
+    fun `wrapPrivateMessage can be unwrapped to original message`() = runTest {
+        val senderKeyPair = NDKKeyPair.generate()
+        val senderSigner = NDKPrivateKeySigner(senderKeyPair)
+        val recipientKeyPair = NDKKeyPair.generate()
+        val recipientSigner = NDKPrivateKeySigner(recipientKeyPair)
+
+        val originalContent = "This is a private message"
+        val originalSubject = "Test Subject"
+        val unsigned = createPrivateMessage(
+            recipientPubkey = recipientKeyPair.pubkeyHex,
+            content = originalContent,
+            subject = originalSubject
+        )
+
+        // Wrap the message
+        val giftWrap = wrapPrivateMessage(unsigned, senderSigner, recipientKeyPair.pubkeyHex)
+
+        // Unwrap and verify
+        val unwrapped = giftWrap.unwrapGift(recipientSigner)
+
+        assertNotNull("Should successfully unwrap", unwrapped)
+        assertEquals("Content should match", originalContent, unwrapped!!.content)
+        assertEquals("Kind should be 14", KIND_PRIVATE_MESSAGE, unwrapped.kind)
+        assertEquals("Subject should match", originalSubject, unwrapped.dmSubject)
+
+        // Verify recipients
+        val recipients = unwrapped.dmRecipients
+        assertTrue("Should include recipient", recipients.contains(recipientKeyPair.pubkeyHex))
     }
 }

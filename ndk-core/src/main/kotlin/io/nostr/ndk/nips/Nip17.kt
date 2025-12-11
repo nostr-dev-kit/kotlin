@@ -1,5 +1,6 @@
 package io.nostr.ndk.nips
 
+import io.nostr.ndk.crypto.NDKPrivateKeySigner
 import io.nostr.ndk.crypto.UnsignedEvent
 import io.nostr.ndk.models.EventId
 import io.nostr.ndk.models.NDKEvent
@@ -121,4 +122,42 @@ fun createPrivateMessage(
         tags = tags,
         content = content
     )
+}
+
+/**
+ * Create a gift-wrapped private message ready to publish.
+ *
+ * Flow: unsigned kind 14 → seal (kind 13) → gift wrap (kind 1059)
+ *
+ * Per NIP-17, the unsigned message is sealed and gift-wrapped using NIP-59.
+ *
+ * @param message The unsigned kind 14 private message (from createPrivateMessage)
+ * @param signer The sender's signer (must be NDKPrivateKeySigner for encryption)
+ * @param recipientPubkey The recipient's public key
+ * @return The gift-wrapped event (kind 1059) ready to publish
+ */
+suspend fun wrapPrivateMessage(
+    message: UnsignedEvent,
+    signer: NDKPrivateKeySigner,
+    recipientPubkey: String
+): NDKEvent {
+    require(message.kind == KIND_PRIVATE_MESSAGE) {
+        "Can only wrap kind 14 private messages, got kind ${message.kind}"
+    }
+
+    // Convert the unsigned event to a rumor (NDKEvent with no signature)
+    // Set the pubkey to the sender's pubkey
+    val rumor = NDKEvent(
+        id = "",
+        pubkey = signer.pubkey,
+        createdAt = message.createdAt,
+        kind = message.kind,
+        tags = message.tags,
+        content = message.content,
+        sig = null
+    )
+
+    // Use NIP-59 gift wrap flow: seal then gift wrap
+    return rumor.seal(signer, recipientPubkey)
+        .giftWrap(recipientPubkey)
 }
