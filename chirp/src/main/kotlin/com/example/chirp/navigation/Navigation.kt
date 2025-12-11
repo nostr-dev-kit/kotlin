@@ -1,18 +1,23 @@
 package com.example.chirp.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import androidx.navigation.NavType
 import com.example.chirp.features.onboarding.OnboardingScreen
-import com.example.chirp.features.home.HomeScreen
+import com.example.chirp.features.main.MainScreen
 import com.example.chirp.features.compose.ComposeScreen
 import com.example.chirp.features.thread.ThreadScreen
 import com.example.chirp.features.profile.ProfileScreen
 import com.example.chirp.features.search.SearchScreen
 import com.example.chirp.features.settings.SettingsScreen
+import com.example.chirp.features.images.ImageDetailScreen
+import com.example.chirp.features.images.ImageFeedViewModel
+import com.example.chirp.features.images.upload.ImageUploadScreen
 
 @Composable
 fun ChirpNavigation(
@@ -34,23 +39,7 @@ fun ChirpNavigation(
         }
 
         composable(Routes.Home.route) {
-            HomeScreen(
-                onNavigateToCompose = { replyTo ->
-                    navController.navigate(Routes.Compose.createRoute(replyTo))
-                },
-                onNavigateToThread = { eventId ->
-                    navController.navigate(Routes.Thread.createRoute(eventId))
-                },
-                onNavigateToProfile = { pubkey ->
-                    navController.navigate(Routes.Profile.createRoute(pubkey))
-                },
-                onNavigateToSearch = {
-                    navController.navigate(Routes.Search.route)
-                },
-                onNavigateToSettings = {
-                    navController.navigate(Routes.Settings.route)
-                }
-            )
+            MainScreen(navController = navController)
         }
 
         composable(
@@ -124,6 +113,40 @@ fun ChirpNavigation(
 
         composable(Routes.Settings.route) {
             SettingsScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(
+            route = Routes.ImageDetail.route,
+            arguments = listOf(
+                navArgument("galleryId") {
+                    type = NavType.StringType
+                }
+            )
+        ) { backStackEntry ->
+            val galleryId = backStackEntry.arguments?.getString("galleryId") ?: return@composable
+
+            // Get the shared ViewModel from the Home route's back stack entry
+            val viewModel: ImageFeedViewModel = hiltViewModel(
+                viewModelStoreOwner = remember(backStackEntry) {
+                    navController.getBackStackEntry(Routes.Home.route)
+                }
+            )
+
+            ImageDetailScreen(
+                galleryId = galleryId,
+                viewModel = viewModel,
+                onDismiss = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(Routes.ImageUpload.route) {
+            ImageUploadScreen(
                 onNavigateBack = {
                     navController.popBackStack()
                 }

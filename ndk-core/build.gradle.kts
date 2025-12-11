@@ -1,6 +1,7 @@
 plugins {
     id("com.android.library")
     id("kotlin-android")
+    id("org.jetbrains.kotlin.plugin.serialization") version "2.1.0"
 }
 
 android {
@@ -65,10 +66,17 @@ dependencies {
     // AndroidX Activity for NIP-55 signer (ActivityResultLauncher support)
     implementation("androidx.activity:activity-ktx:1.9.3")
 
+    // Ktor for HTTP client (Blossom uploads)
+    implementation("io.ktor:ktor-client-core:2.3.7")
+    implementation("io.ktor:ktor-client-okhttp:2.3.7")
+    implementation("io.ktor:ktor-client-content-negotiation:2.3.7")
+    implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.7")
+
     // Testing
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
     testImplementation("com.squareup.okhttp3:mockwebserver:5.0.0-alpha.14")
+    testImplementation("io.ktor:ktor-client-mock:2.3.7")
     // secp256k1 JNI bindings for unit tests (includes all platforms)
     testImplementation("fr.acinq.secp256k1:secp256k1-kmp-jni-jvm:0.21.0")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
