@@ -43,3 +43,6 @@ captures/
 
 # Misc
 *.log
+
+# Git worktrees
+.worktrees/
