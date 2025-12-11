@@ -6,6 +6,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import androidx.navigation.NavType
+import com.example.chirp.features.onboarding.OnboardingScreen
 
 @Composable
 fun ChirpNavigation(
@@ -17,7 +18,13 @@ fun ChirpNavigation(
         startDestination = startDestination
     ) {
         composable(Routes.Onboarding.route) {
-            // Placeholder - will implement later
+            OnboardingScreen(
+                onLoginSuccess = {
+                    navController.navigate(Routes.Home.route) {
+                        popUpTo(Routes.Onboarding.route) { inclusive = true }
+                    }
+                }
+            )
         }
 
         composable(Routes.Home.route) {
