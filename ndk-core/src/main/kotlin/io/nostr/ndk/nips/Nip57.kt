@@ -422,6 +422,14 @@ sealed class LnurlInvoiceResult {
 }
 
 /**
+ * Result of zap receipt validation.
+ */
+sealed class ZapValidationResult {
+    object Valid : ZapValidationResult()
+    data class Invalid(val reason: String) : ZapValidationResult()
+}
+
+/**
  * Fetches a Lightning invoice from a LNURL callback endpoint.
  *
  * Per NIP-57, the callback URL must include:
@@ -499,4 +507,64 @@ suspend fun fetchLnurlInvoice(
     } catch (e: Exception) {
         LnurlInvoiceResult.Error(e.message ?: "Unknown error")
     }
+}
+
+/**
+ * Validates a zap receipt according to NIP-57 requirements.
+ *
+ * NIP-57 validation requirements:
+ * 1. Receipt is kind 9735
+ * 2. Has `description` tag containing JSON-encoded zap request
+ * 3. Embedded request is valid kind 9734
+ * 4. Receipt `pubkey` matches recipient's LNURL provider's `nostrPubkey` (if expectedNostrPubkey is provided)
+ * 5. BOLT11 invoice amount equals zap request's `amount` tag
+ *
+ * @param expectedNostrPubkey Optional expected pubkey of the LNURL provider
+ * @return ZapValidationResult.Valid if valid, or ZapValidationResult.Invalid with reason if invalid
+ */
+fun NDKEvent.validateZapReceipt(expectedNostrPubkey: String? = null): ZapValidationResult {
+    // 1. Verify receipt is kind 9735
+    if (kind != KIND_ZAP_RECEIPT) {
+        return ZapValidationResult.Invalid("Event is not a zap receipt (kind $kind, expected $KIND_ZAP_RECEIPT)")
+    }
+
+    // 2. Get and verify description tag
+    val descriptionJson = tagValue("description")
+        ?: return ZapValidationResult.Invalid("Missing description tag")
+
+    // 3. Parse embedded zap request
+    val zapRequest = try {
+        NDKEvent.fromJson(descriptionJson)
+    } catch (e: Exception) {
+        return ZapValidationResult.Invalid("Failed to parse zap request from description: ${e.message}")
+    }
+
+    // 4. Verify embedded request is kind 9734
+    if (zapRequest.kind != KIND_ZAP_REQUEST) {
+        return ZapValidationResult.Invalid("Embedded request is not a zap request (kind ${zapRequest.kind}, expected $KIND_ZAP_REQUEST)")
+    }
+
+    // 5. Verify pubkey matches if expectedNostrPubkey is provided
+    if (expectedNostrPubkey != null && pubkey != expectedNostrPubkey) {
+        return ZapValidationResult.Invalid("Receipt pubkey ($pubkey) does not match expected LNURL provider pubkey ($expectedNostrPubkey)")
+    }
+
+    // 6. Get and verify bolt11 invoice
+    val bolt11 = tagValue("bolt11")
+        ?: return ZapValidationResult.Invalid("Missing bolt11 tag")
+
+    // 7. Parse bolt11 amount
+    val bolt11Amount = parseBolt11Amount(bolt11)
+        ?: return ZapValidationResult.Invalid("Failed to parse amount from bolt11 invoice")
+
+    // 8. Get zap request amount
+    val requestAmount = zapRequest.tagValue("amount")?.toLongOrNull()
+        ?: return ZapValidationResult.Invalid("Missing or invalid amount in zap request")
+
+    // 9. Verify amounts match
+    if (bolt11Amount != requestAmount) {
+        return ZapValidationResult.Invalid("Amount mismatch: bolt11 has $bolt11Amount millisats, request has $requestAmount millisats")
+    }
+
+    return ZapValidationResult.Valid
 }
