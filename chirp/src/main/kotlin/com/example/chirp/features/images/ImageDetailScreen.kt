@@ -15,10 +15,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
-import io.nostr.ndk.NDK
 import io.nostr.ndk.kinds.NDKImage
 
 /**
@@ -29,10 +30,38 @@ import io.nostr.ndk.kinds.NDKImage
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun ImageDetailScreen(
-    gallery: NDKImage,
-    ndk: NDK,
+    galleryId: String,
+    viewModel: ImageFeedViewModel = hiltViewModel(),
     onDismiss: () -> Unit
 ) {
+    // Get the gallery from the ViewModel
+    val gallery = viewModel.getGalleryById(galleryId)
+
+    // Show loading or error if gallery not found
+    if (gallery == null) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    "Gallery not found",
+                    color = Color.White,
+                    style = MaterialTheme.typography.bodyLarge
+                )
+                Button(onClick = onDismiss) {
+                    Text("Go Back")
+                }
+            }
+        }
+        return
+    }
+
     var currentPage by remember { mutableStateOf(0) }
     val pagerState = rememberPagerState(pageCount = { gallery.images.size })
 

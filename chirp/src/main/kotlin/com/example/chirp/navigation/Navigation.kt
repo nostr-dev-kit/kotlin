@@ -116,11 +116,22 @@ fun ChirpNavigation(
             )
         }
 
-        // ImageDetail route requires passing NDKImage object through shared state
-        // This will be implemented in a future update with ViewModel-based navigation
-        // composable(Routes.ImageDetail.route) {
-        //     // Placeholder for gallery detail screen
-        // }
+        composable(
+            route = Routes.ImageDetail.route,
+            arguments = listOf(
+                navArgument("galleryId") {
+                    type = NavType.StringType
+                }
+            )
+        ) { backStackEntry ->
+            val galleryId = backStackEntry.arguments?.getString("galleryId") ?: return@composable
+            ImageDetailScreen(
+                galleryId = galleryId,
+                onDismiss = {
+                    navController.popBackStack()
+                }
+            )
+        }
 
         composable(Routes.ImageUpload.route) {
             ImageUploadScreen(

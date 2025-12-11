@@ -12,6 +12,7 @@ import androidx.navigation.NavHostController
 import com.example.chirp.features.home.HomeScreen
 import com.example.chirp.features.images.ImageFeedScreen
 import com.example.chirp.models.ContentType
+import com.example.chirp.navigation.Routes
 
 @Composable
 fun MainScreen(
@@ -62,10 +63,10 @@ fun MainScreen(
                 ContentType.Images -> {
                     ImageFeedScreen(
                         onImageClick = { gallery ->
-                            navController.navigate("image_detail/${gallery.id}")
+                            navController.navigate(Routes.ImageDetail.createRoute(gallery.id))
                         },
                         onUploadClick = {
-                            navController.navigate("image_upload")
+                            navController.navigate(Routes.ImageUpload.route)
                         }
                     )
                 }
