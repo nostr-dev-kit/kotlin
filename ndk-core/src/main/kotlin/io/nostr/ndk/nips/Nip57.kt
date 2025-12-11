@@ -8,6 +8,7 @@ import io.nostr.ndk.models.PublicKey
 import io.nostr.ndk.utils.Bech32
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.concurrent.TimeUnit
@@ -399,5 +400,103 @@ suspend fun fetchLnurlPayMetadata(url: String, httpClient: OkHttpClient = defaul
         }
     } catch (e: Exception) {
         LnurlPayResult.Error(e.message ?: "Unknown error")
+    }
+}
+
+/**
+ * LNURL invoice response data structure.
+ *
+ * Represents the response from a LNURL callback when requesting an invoice.
+ */
+data class LnurlInvoiceResponse(
+    val pr: String,
+    val routes: List<Any>?
+)
+
+/**
+ * Result of a LNURL invoice fetch operation.
+ */
+sealed class LnurlInvoiceResult {
+    data class Success(val invoice: LnurlInvoiceResponse) : LnurlInvoiceResult()
+    data class Error(val message: String) : LnurlInvoiceResult()
+}
+
+/**
+ * Fetches a Lightning invoice from a LNURL callback endpoint.
+ *
+ * Per NIP-57, the callback URL must include:
+ * - `amount`: Amount in millisatoshis
+ * - `nostr`: JSON-encoded zap request (kind 9734), then URI-encoded
+ * - `lnurl`: The recipient's encoded LNURL
+ *
+ * @param callback The LNURL callback URL
+ * @param amountMillisats Amount to pay in millisatoshis
+ * @param zapRequest The zap request event (kind 9734)
+ * @param lnurl The recipient's encoded LNURL
+ * @param httpClient Optional HTTP client (defaults to a basic client with 10s timeouts)
+ * @return LnurlInvoiceResult containing the invoice or error
+ */
+suspend fun fetchLnurlInvoice(
+    callback: String,
+    amountMillisats: Long,
+    zapRequest: NDKEvent,
+    lnurl: String,
+    httpClient: OkHttpClient = defaultHttpClient
+): LnurlInvoiceResult = withContext(Dispatchers.IO) {
+    try {
+        // Serialize the zap request to JSON
+        val zapRequestJson = objectMapper.writeValueAsString(zapRequest)
+
+        // URI-encode the JSON string
+        val encodedZapRequest = java.net.URLEncoder.encode(zapRequestJson, "UTF-8")
+
+        // Build the callback URL with query parameters
+        val finalUrl = try {
+            callback.toHttpUrl().newBuilder()
+                .addQueryParameter("amount", amountMillisats.toString())
+                .addQueryParameter("nostr", encodedZapRequest)
+                .addQueryParameter("lnurl", lnurl)
+                .build()
+        } catch (e: Exception) {
+            return@withContext LnurlInvoiceResult.Error("Invalid callback URL: ${e.message}")
+        }
+
+        val request = Request.Builder()
+            .url(finalUrl)
+            .header("Accept", "application/json")
+            .build()
+
+        httpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                return@withContext LnurlInvoiceResult.Error("HTTP ${response.code}: ${response.message}")
+            }
+
+            val body = response.body?.string()
+                ?: return@withContext LnurlInvoiceResult.Error("Empty response body")
+
+            if (body.isBlank()) {
+                return@withContext LnurlInvoiceResult.Error("Empty response body")
+            }
+
+            try {
+                val json: Map<String, Any?> = objectMapper.readValue(body)
+
+                val pr = json["pr"] as? String
+                    ?: return@withContext LnurlInvoiceResult.Error("Missing required field: pr")
+
+                val routes = json["routes"] as? List<Any>
+
+                LnurlInvoiceResult.Success(
+                    LnurlInvoiceResponse(
+                        pr = pr,
+                        routes = routes
+                    )
+                )
+            } catch (e: Exception) {
+                LnurlInvoiceResult.Error("Failed to parse JSON: ${e.message}")
+            }
+        }
+    } catch (e: Exception) {
+        LnurlInvoiceResult.Error(e.message ?: "Unknown error")
     }
 }
