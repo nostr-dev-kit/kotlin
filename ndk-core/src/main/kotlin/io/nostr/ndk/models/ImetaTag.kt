@@ -6,7 +6,7 @@ package io.nostr.ndk.models
  * Format: ["imeta", "url <url> blurhash <hash> dim <w>x<h> m <mime> x <sha256> size <bytes> alt <text>"]
  */
 data class ImetaTag(
-    val url: String?,
+    val url: String,
     val blurhash: String? = null,
     val dimensions: Pair<Int, Int>? = null,
     val mimeType: String? = null,
