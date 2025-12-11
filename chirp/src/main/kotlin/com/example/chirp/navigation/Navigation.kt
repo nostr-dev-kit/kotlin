@@ -7,6 +7,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import androidx.navigation.NavType
 import com.example.chirp.features.onboarding.OnboardingScreen
+import com.example.chirp.features.home.HomeScreen
 
 @Composable
 fun ChirpNavigation(
@@ -28,7 +29,23 @@ fun ChirpNavigation(
         }
 
         composable(Routes.Home.route) {
-            // Placeholder - will implement later
+            HomeScreen(
+                onNavigateToCompose = { replyTo ->
+                    navController.navigate(Routes.Compose.createRoute(replyTo))
+                },
+                onNavigateToThread = { eventId ->
+                    navController.navigate(Routes.Thread.createRoute(eventId))
+                },
+                onNavigateToProfile = { pubkey ->
+                    navController.navigate(Routes.Profile.createRoute(pubkey))
+                },
+                onNavigateToSearch = {
+                    navController.navigate(Routes.Search.route)
+                },
+                onNavigateToSettings = {
+                    navController.navigate(Routes.Settings.route)
+                }
+            )
         }
 
         composable(
