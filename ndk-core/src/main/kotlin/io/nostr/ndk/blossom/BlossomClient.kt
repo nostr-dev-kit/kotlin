@@ -14,6 +14,7 @@ import kotlinx.serialization.json.Json
 import java.io.File
 import java.io.InputStream
 import java.security.MessageDigest
+import java.util.Base64
 
 /**
  * Client for uploading files to Blossom servers (BUD-01 protocol).
@@ -52,10 +53,13 @@ class BlossomClient(
                 signer = signer
             )
 
-            // Upload with auth header
+            // Upload with auth header (base64-encoded as per BUD-01)
+            val authJson = authEvent.toJson()
+            val authBase64 = Base64.getEncoder().encodeToString(authJson.toByteArray())
+
             val response: HttpResponse = httpClient.put("$serverUrl/upload") {
                 headers {
-                    append("Authorization", "Nostr ${authEvent.toJson()}")
+                    append("Authorization", "Nostr $authBase64")
                 }
                 setBody(file.readBytes())
                 contentType(ContentType.parse(mimeType))
