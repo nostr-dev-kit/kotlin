@@ -1,0 +1,19 @@
+appId: com.example.chirp
+---
+- launchApp
+- assertVisible: "Welcome to Chirp"
+- tapOn: "Create New Account"
+- extendedWaitUntil:
+    visible: "Notes"
+    timeout: 10000
+- tapOn: "Images"
+- assertVisible: "Images"
+- extendedWaitUntil:
+    visible:
+      text: ".*"
+      index: 0
+    timeout: 5000
+- tapOn:
+    index: 0
+- assertNotVisible: "Gallery not found"
+- assertVisible: "Close"
