@@ -154,4 +154,63 @@ class NDKTest {
         // Different pool instances
         assertTrue(ndk1.pool !== ndk2.pool)
     }
+
+    // ===========================================
+    // Outbox Model Tests
+    // ===========================================
+
+    @Test
+    fun `enableOutboxModel defaults to true`() {
+        val ndk = NDK()
+
+        assertTrue(ndk.enableOutboxModel)
+    }
+
+    @Test
+    fun `enableOutboxModel can be disabled`() {
+        val ndk = NDK()
+        ndk.enableOutboxModel = false
+
+        assertFalse(ndk.enableOutboxModel)
+    }
+
+    @Test
+    fun `autoConnectUserRelays defaults to true`() {
+        val ndk = NDK()
+
+        assertTrue(ndk.autoConnectUserRelays)
+    }
+
+    @Test
+    fun `relayGoalPerAuthor defaults to 2`() {
+        val ndk = NDK()
+
+        assertEquals(2, ndk.relayGoalPerAuthor)
+    }
+
+    @Test
+    fun `outboxRelayUrls has default relays`() {
+        val ndk = NDK()
+
+        assertTrue(ndk.outboxRelayUrls.isNotEmpty())
+        assertTrue(ndk.outboxRelayUrls.contains("wss://purplepag.es"))
+    }
+
+    @Test
+    fun `outboxPool is lazy initialized`() {
+        val ndk = NDK()
+
+        val outboxPool = ndk.outboxPool
+        assertNotNull(outboxPool)
+
+        // Second access returns same instance
+        assertEquals(outboxPool, ndk.outboxPool)
+    }
+
+    @Test
+    fun `outboxPool is separate from main pool`() {
+        val ndk = NDK()
+
+        assertTrue(ndk.pool !== ndk.outboxPool)
+    }
 }

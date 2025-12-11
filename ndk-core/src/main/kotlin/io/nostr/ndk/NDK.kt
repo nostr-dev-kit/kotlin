@@ -53,10 +53,48 @@ class NDK(
     val accountStorage: NDKAccountStorage? = null
 ) {
     /**
+     * Whether to use the outbox model for relay selection.
+     * When enabled, subscriptions with author filters will query each author's write relays.
+     */
+    var enableOutboxModel: Boolean = true
+
+    /**
+     * Whether to automatically connect to the user's relays when a signer is set.
+     * When enabled, fetches the user's relay list and adds those relays to the pool.
+     */
+    var autoConnectUserRelays: Boolean = true
+
+    /**
+     * Target number of relays to query per author when using outbox model.
+     * Higher values increase redundancy but may slow down queries.
+     */
+    var relayGoalPerAuthor: Int = 2
+
+    /**
+     * URLs of relays dedicated to fetching relay lists (NIP-65).
+     * These relays are queried when looking up a user's relay list.
+     */
+    val outboxRelayUrls: MutableSet<String> = mutableSetOf(
+        "wss://purplepag.es",
+        "wss://relay.nos.social"
+    )
+    /**
      * Lazy initialized relay pool.
      * The pool manages all relay connections and their lifecycle.
      */
     val pool: NDKPool by lazy { NDKPool(this) }
+
+    /**
+     * Lazy initialized outbox relay pool.
+     * This pool is dedicated to fetching relay lists (NIP-65) for the outbox model.
+     */
+    val outboxPool: NDKPool by lazy {
+        val pool = NDKPool(this)
+        outboxRelayUrls.forEach { url ->
+            pool.addRelay(url, connect = false)
+        }
+        pool
+    }
 
     /**
      * Lazy initialized subscription manager.

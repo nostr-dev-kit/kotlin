@@ -3,6 +3,9 @@ package io.nostr.ndk.outbox
 import io.nostr.ndk.NDK
 import io.nostr.ndk.models.NDKEvent
 import io.nostr.ndk.models.PublicKey
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 
 /**
  * Tracks relay lists (NIP-65) for users and provides outbox model capabilities.
@@ -15,6 +18,14 @@ import io.nostr.ndk.models.PublicKey
  * the optimal relays for querying and publishing.
  */
 class NDKOutboxTracker(private val ndk: NDK) {
+
+    private val _relayListUpdates = MutableSharedFlow<Pair<PublicKey, RelayList>>(replay = 0, extraBufferCapacity = 64)
+
+    /**
+     * Flow of relay list discovery events.
+     * Emitted when a new relay list is tracked via [trackRelayList].
+     */
+    val onRelayListDiscovered: SharedFlow<Pair<PublicKey, RelayList>> = _relayListUpdates.asSharedFlow()
 
     /**
      * Gets the relay list for a pubkey from cache.
@@ -119,7 +130,7 @@ class NDKOutboxTracker(private val ndk: NDK) {
     }
 
     /**
-     * Tracks a relay list event, storing it in cache.
+     * Tracks a relay list event, storing it in cache and emitting update.
      * Call this when you receive a kind 10002 event.
      *
      * @param event The relay list event (kind 10002)
@@ -127,5 +138,20 @@ class NDKOutboxTracker(private val ndk: NDK) {
     suspend fun trackRelayList(event: NDKEvent) {
         require(event.kind == 10002) { "Expected kind 10002, got ${event.kind}" }
         ndk.cacheAdapter?.store(event)
+
+        // Emit update for subscriptions to react to
+        val relayList = RelayList.fromEvent(event)
+        _relayListUpdates.emit(event.pubkey to relayList)
+    }
+
+    /**
+     * Fetches the relay list for a pubkey, checking cache first then querying relays.
+     *
+     * @param pubkey The public key to look up
+     * @return The relay list if found, null otherwise
+     */
+    suspend fun fetchRelayList(pubkey: PublicKey): RelayList? {
+        // For now, just check cache (full implementation will query outbox relays)
+        return getRelayList(pubkey)
     }
 }

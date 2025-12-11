@@ -81,7 +81,12 @@ class NDKSubscription(
     private val cacheScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     // Set of relays this subscription is active on
-    private var activeRelays: Set<NDKRelay> = emptySet()
+    private val _activeRelays = MutableStateFlow<Set<NDKRelay>>(emptySet())
+
+    /**
+     * StateFlow tracking which relays this subscription is active on.
+     */
+    val activeRelays: StateFlow<Set<NDKRelay>> = _activeRelays.asStateFlow()
 
     /**
      * Starts the subscription on the specified relays.
@@ -90,8 +95,35 @@ class NDKSubscription(
      * @param relays Set of relays to subscribe on
      */
     internal fun start(relays: Set<NDKRelay>) {
-        activeRelays = relays
+        _activeRelays.value = relays
         relays.forEach { relay ->
+            relay.subscribe(id, filters)
+        }
+    }
+
+    /**
+     * Checks if this subscription is active on a relay with the given URL.
+     *
+     * @param url The relay URL to check
+     * @return true if the subscription is active on that relay
+     */
+    fun hasRelay(url: String): Boolean {
+        return _activeRelays.value.any { it.url == url }
+    }
+
+    /**
+     * Adds new relays to this active subscription.
+     * New relays will receive the subscription filters.
+     * Ignores relays that are already active.
+     *
+     * @param relays Set of relays to add
+     */
+    fun addRelays(relays: Set<NDKRelay>) {
+        val newRelays = relays.filter { !hasRelay(it.url) }.toSet()
+        if (newRelays.isEmpty()) return
+
+        _activeRelays.value = _activeRelays.value + newRelays
+        newRelays.forEach { relay ->
             relay.subscribe(id, filters)
         }
     }
@@ -101,10 +133,10 @@ class NDKSubscription(
      * After calling stop(), no more events will be emitted.
      */
     fun stop() {
-        activeRelays.forEach { relay ->
+        _activeRelays.value.forEach { relay ->
             relay.unsubscribe(id)
         }
-        activeRelays = emptySet()
+        _activeRelays.value = emptySet()
     }
 
     /**

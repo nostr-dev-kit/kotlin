@@ -214,6 +214,91 @@ class NDKSubscriptionTest {
         assertNotNull(sub)
     }
 
+    // ===========================================
+    // Dynamic Relay Update Tests
+    // ===========================================
+
+    @Test
+    fun `activeRelays tracks relays subscription is using`() {
+        val filter = NDKFilter(kinds = setOf(1))
+        val sub = NDKSubscription("test", listOf(filter), ndk)
+
+        val relay1 = createTestRelay("wss://relay1.com")
+        val relay2 = createTestRelay("wss://relay2.com")
+
+        // Initially empty
+        assertTrue(sub.activeRelays.value.isEmpty())
+
+        // Start populates activeRelays
+        sub.start(setOf(relay1, relay2))
+
+        assertEquals(2, sub.activeRelays.value.size)
+        assertTrue(sub.activeRelays.value.contains(relay1))
+        assertTrue(sub.activeRelays.value.contains(relay2))
+    }
+
+    @Test
+    fun `hasRelay returns true for active relay`() {
+        val filter = NDKFilter(kinds = setOf(1))
+        val sub = NDKSubscription("test", listOf(filter), ndk)
+
+        val relay = createTestRelay("wss://relay1.com")
+        sub.start(setOf(relay))
+
+        assertTrue(sub.hasRelay("wss://relay1.com"))
+        assertFalse(sub.hasRelay("wss://other-relay.com"))
+    }
+
+    @Test
+    fun `addRelays adds new relays to subscription`() {
+        val filter = NDKFilter(kinds = setOf(1))
+        val sub = NDKSubscription("test", listOf(filter), ndk)
+
+        val relay1 = createTestRelay("wss://relay1.com")
+        sub.start(setOf(relay1))
+
+        assertEquals(1, sub.activeRelays.value.size)
+
+        val relay2 = createTestRelay("wss://relay2.com")
+        sub.addRelays(setOf(relay2))
+
+        assertEquals(2, sub.activeRelays.value.size)
+        assertTrue(sub.hasRelay("wss://relay2.com"))
+    }
+
+    @Test
+    fun `addRelays ignores duplicate relays`() {
+        val filter = NDKFilter(kinds = setOf(1))
+        val sub = NDKSubscription("test", listOf(filter), ndk)
+
+        val relay = createTestRelay("wss://relay1.com")
+        sub.start(setOf(relay))
+
+        assertEquals(1, sub.activeRelays.value.size)
+
+        // Try to add same relay again
+        val sameRelay = createTestRelay("wss://relay1.com")
+        sub.addRelays(setOf(sameRelay))
+
+        // Should still be 1
+        assertEquals(1, sub.activeRelays.value.size)
+    }
+
+    @Test
+    fun `stop clears activeRelays`() {
+        val filter = NDKFilter(kinds = setOf(1))
+        val sub = NDKSubscription("test", listOf(filter), ndk)
+
+        val relay = createTestRelay("wss://relay1.com")
+        sub.start(setOf(relay))
+
+        assertEquals(1, sub.activeRelays.value.size)
+
+        sub.stop()
+
+        assertTrue(sub.activeRelays.value.isEmpty())
+    }
+
     // Helper functions
 
     private fun createTestEvent(
