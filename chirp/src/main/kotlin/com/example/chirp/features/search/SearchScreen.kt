@@ -118,6 +118,7 @@ fun SearchScreen(
                         ) { note ->
                             NoteCard(
                                 note = note,
+                                ndk = viewModel.ndk,
                                 onReply = { },
                                 onReact = { _, _ -> },
                                 onNoteClick = { eventId -> onNavigateToThread(eventId) },

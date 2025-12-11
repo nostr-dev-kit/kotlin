@@ -6,11 +6,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Reply
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.chirp.components.UserDisplayName
+import io.nostr.ndk.NDK
 import io.nostr.ndk.models.NDKEvent
 import java.text.SimpleDateFormat
 import java.util.*
@@ -18,6 +20,7 @@ import java.util.*
 @Composable
 fun NoteCard(
     note: NDKEvent,
+    ndk: NDK,
     onReply: (String) -> Unit,
     onReact: (String, String) -> Unit,
     onNoteClick: (String) -> Unit,
@@ -39,8 +42,9 @@ fun NoteCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = note.pubkey.take(8) + "...",
+                UserDisplayName(
+                    pubkey = note.pubkey,
+                    ndk = ndk,
                     style = MaterialTheme.typography.titleSmall,
                     modifier = Modifier.clickable { onProfileClick(note.pubkey) }
                 )

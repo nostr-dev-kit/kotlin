@@ -16,7 +16,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class SearchViewModel @Inject constructor(
-    private val ndk: NDK
+    val ndk: NDK
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SearchState())

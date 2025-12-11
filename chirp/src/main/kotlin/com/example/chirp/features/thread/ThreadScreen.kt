@@ -71,6 +71,7 @@ fun ThreadScreen(
                         item {
                             NoteCard(
                                 note = state.mainEvent!!,
+                                ndk = viewModel.ndk,
                                 onReply = { },
                                 onReact = { _, _ -> },
                                 onNoteClick = { },
@@ -96,6 +97,7 @@ fun ThreadScreen(
                         ) { reply ->
                             NoteCard(
                                 note = reply,
+                                ndk = viewModel.ndk,
                                 onReply = { },
                                 onReact = { _, _ -> },
                                 onNoteClick = { },

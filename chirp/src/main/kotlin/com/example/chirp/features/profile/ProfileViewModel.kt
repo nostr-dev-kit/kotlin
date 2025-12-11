@@ -17,7 +17,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
-    private val ndk: NDK,
+    val ndk: NDK,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 

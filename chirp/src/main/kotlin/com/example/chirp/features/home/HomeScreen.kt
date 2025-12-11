@@ -85,6 +85,7 @@ fun HomeScreen(
                         items(state.notes, key = { it.id }) { note ->
                             NoteCard(
                                 note = note,
+                                ndk = viewModel.ndk,
                                 onReply = { onNavigateToCompose(it) },
                                 onReact = { eventId, emoji ->
                                     viewModel.onIntent(HomeIntent.ReactToNote(eventId, emoji))

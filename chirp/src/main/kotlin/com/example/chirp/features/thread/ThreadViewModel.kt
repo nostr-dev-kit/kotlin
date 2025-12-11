@@ -15,7 +15,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class ThreadViewModel @Inject constructor(
-    private val ndk: NDK,
+    val ndk: NDK,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 

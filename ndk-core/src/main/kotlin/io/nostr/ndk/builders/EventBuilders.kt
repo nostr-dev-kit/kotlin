@@ -7,8 +7,11 @@ import io.nostr.ndk.models.NDKEvent
 import io.nostr.ndk.models.NDKTag
 import io.nostr.ndk.models.PublicKey
 import io.nostr.ndk.nips.KIND_CONTACT_LIST
+import io.nostr.ndk.nips.KIND_GENERIC_REPLY
+import io.nostr.ndk.nips.KIND_GENERIC_REPOST
 import io.nostr.ndk.nips.KIND_LONG_FORM
 import io.nostr.ndk.nips.KIND_REACTION
+import io.nostr.ndk.nips.KIND_REPOST
 import io.nostr.ndk.nips.KIND_TEXT_NOTE
 import io.nostr.ndk.nips.KIND_ZAP_REQUEST
 
@@ -309,3 +312,265 @@ fun NDK.contactList() = ContactListBuilder()
  * Extension function for convenient zap request creation.
  */
 fun NDK.zapRequest() = ZapRequestBuilder()
+
+/**
+ * Builder for creating reply events following NIP-10 conventions.
+ *
+ * This builder handles both:
+ * - Standard kind 1 replies (for replying to kind 1 events)
+ * - NIP-22 generic replies (kind 1111, for replying to any other kind)
+ *
+ * The builder automatically:
+ * - Sets the correct event kind based on the parent event
+ * - Creates proper root/reply tag markers
+ * - Copies necessary tags from parent events
+ * - Handles thread structure correctly
+ *
+ * Usage:
+ * ```kotlin
+ * // Reply to a text note (kind 1)
+ * val reply = ReplyBuilder(parentEvent)
+ *     .content("Great point!")
+ *     .build(signer)
+ *
+ * // Reply to a long-form article (kind 30023)
+ * val comment = ReplyBuilder(article)
+ *     .content("Interesting article!")
+ *     .build(signer)
+ * ```
+ */
+class ReplyBuilder(private val replyTo: NDKEvent) {
+    private var content: String = ""
+    private val tags = mutableListOf<NDKTag>()
+
+    fun content(content: String) = apply { this.content = content }
+
+    fun tag(name: String, vararg values: String) = apply {
+        tags.add(NDKTag(name, values.toList()))
+    }
+
+    suspend fun build(signer: NDKSigner): NDKEvent {
+        val finalKind: Int
+        val finalTags = mutableListOf<NDKTag>()
+
+        if (replyTo.kind == KIND_TEXT_NOTE) {
+            // Standard kind 1 reply following NIP-10
+            finalKind = KIND_TEXT_NOTE
+
+            val hasETags = replyTo.tagsWithName("e").isNotEmpty()
+
+            if (hasETags) {
+                // Parent has e-tags, so it's part of a thread
+                // Copy all existing e and p tags from parent
+                finalTags.addAll(replyTo.tagsWithName("e"))
+                finalTags.addAll(replyTo.tagsWithName("p"))
+
+                // Add the parent event as "reply"
+                finalTags.add(NDKTag("e", listOf(replyTo.id, "", "reply")))
+
+                // Add parent author if not already present
+                if (!finalTags.any { it.name == "p" && it.values.firstOrNull() == replyTo.pubkey }) {
+                    finalTags.add(NDKTag("p", listOf(replyTo.pubkey)))
+                }
+            } else {
+                // Parent is a root event, mark it as such
+                finalTags.add(NDKTag("e", listOf(replyTo.id, "", "root")))
+                finalTags.add(NDKTag("p", listOf(replyTo.pubkey)))
+            }
+        } else {
+            // NIP-22 generic reply (kind 1111) for non-kind-1 events
+            finalKind = KIND_GENERIC_REPLY
+
+            // Check if parent already has uppercase root tags (A, E, I, K, P)
+            val hasUppercaseTags = replyTo.tags.any {
+                it.name in listOf("A", "E", "I", "K", "P")
+            }
+
+            if (hasUppercaseTags) {
+                // Parent is itself a comment, copy its uppercase tags
+                finalTags.addAll(replyTo.tags.filter { it.name in listOf("A", "E", "I", "K", "P") })
+            } else {
+                // Parent is a root event, create uppercase tags
+                if (replyTo.isParameterizedReplaceable) {
+                    // Use 'A' tag for replaceable events
+                    val dTag = replyTo.tagValue("d") ?: ""
+                    val coordinate = "${replyTo.kind}:${replyTo.pubkey}:$dTag"
+                    finalTags.add(NDKTag("A", listOf(coordinate, "")))
+                } else {
+                    // Use 'E' tag for regular events
+                    finalTags.add(NDKTag("E", listOf(replyTo.id, "", replyTo.pubkey)))
+                }
+
+                // Add uppercase K and P tags for root
+                finalTags.add(NDKTag("K", listOf(replyTo.kind.toString())))
+                finalTags.add(NDKTag("P", listOf(replyTo.pubkey)))
+            }
+
+            // Add lowercase tags for the direct parent
+            if (replyTo.isParameterizedReplaceable) {
+                val dTag = replyTo.tagValue("d") ?: ""
+                val coordinate = "${replyTo.kind}:${replyTo.pubkey}:$dTag"
+                finalTags.add(NDKTag("a", listOf(coordinate, "")))
+            } else {
+                finalTags.add(NDKTag("e", listOf(replyTo.id, "", replyTo.pubkey)))
+            }
+
+            // Add lowercase k and p tags for parent
+            finalTags.add(NDKTag("k", listOf(replyTo.kind.toString())))
+            finalTags.add(NDKTag("p", listOf(replyTo.pubkey)))
+
+            // Carry over all p tags from parent (excluding parent author which we already added)
+            replyTo.tagsWithName("p").forEach { pTag ->
+                val taggedPubkey = pTag.values.firstOrNull()
+                if (taggedPubkey != null && taggedPubkey != replyTo.pubkey) {
+                    if (!finalTags.any { it.name == "p" && it.values.firstOrNull() == taggedPubkey }) {
+                        finalTags.add(pTag)
+                    }
+                }
+            }
+        }
+
+        // Add any custom tags provided by the caller
+        finalTags.addAll(tags)
+
+        val unsigned = UnsignedEvent(
+            pubkey = signer.pubkey,
+            createdAt = System.currentTimeMillis() / 1000,
+            kind = finalKind,
+            tags = finalTags,
+            content = content
+        )
+        return signer.sign(unsigned)
+    }
+}
+
+/**
+ * Builder for creating quote events following NIP-18 and NIP-10.
+ *
+ * A quote is when you want to reference another event while adding your own commentary.
+ * Uses a "q" tag to reference the quoted event.
+ *
+ * Usage:
+ * ```kotlin
+ * val quote = QuoteBuilder(originalEvent)
+ *     .content("This is a great take! nostr:${originalEvent.nevent()}")
+ *     .build(signer)
+ * ```
+ */
+class QuoteBuilder(private val quotedEvent: NDKEvent) {
+    private var content: String = ""
+    private val tags = mutableListOf<NDKTag>()
+
+    fun content(content: String) = apply { this.content = content }
+
+    fun tag(name: String, vararg values: String) = apply {
+        tags.add(NDKTag(name, values.toList()))
+    }
+
+    suspend fun build(signer: NDKSigner): NDKEvent {
+        val finalTags = mutableListOf<NDKTag>()
+
+        // Add q tag for the quoted event (NIP-18)
+        // Format: ["q", <event-id>, <relay-url>, <pubkey>]
+        finalTags.add(NDKTag("q", listOf(quotedEvent.id, "", quotedEvent.pubkey)))
+
+        // Add any custom tags
+        finalTags.addAll(tags)
+
+        val unsigned = UnsignedEvent(
+            pubkey = signer.pubkey,
+            createdAt = System.currentTimeMillis() / 1000,
+            kind = KIND_TEXT_NOTE, // Quotes are always kind 1
+            tags = finalTags,
+            content = content
+        )
+        return signer.sign(unsigned)
+    }
+}
+
+/**
+ * Builder for creating repost events following NIP-18.
+ *
+ * Reposts are used to share another user's event with your followers.
+ * - For kind 1 events, uses kind 6 (repost)
+ * - For other event kinds, uses kind 16 (generic repost)
+ *
+ * The repost event contains:
+ * - The original event JSON in the content (for non-protected events)
+ * - An "e" or "a" tag referencing the original event
+ * - A "k" tag indicating the kind of the original event (for non-kind-1)
+ * - A "p" tag referencing the original author
+ *
+ * Usage:
+ * ```kotlin
+ * val repost = RepostBuilder(originalEvent)
+ *     .build(signer)
+ * ```
+ */
+class RepostBuilder(private val originalEvent: NDKEvent) {
+    private val tags = mutableListOf<NDKTag>()
+
+    fun tag(name: String, vararg values: String) = apply {
+        tags.add(NDKTag(name, values.toList()))
+    }
+
+    suspend fun build(signer: NDKSigner): NDKEvent {
+        val finalTags = mutableListOf<NDKTag>()
+
+        // Determine the repost kind
+        val repostKind = if (originalEvent.kind == KIND_TEXT_NOTE) {
+            KIND_REPOST
+        } else {
+            KIND_GENERIC_REPOST
+        }
+
+        // Add reference to the original event
+        if (originalEvent.isParameterizedReplaceable) {
+            // Use 'a' tag for replaceable events
+            val dTag = originalEvent.tagValue("d") ?: ""
+            val coordinate = "${originalEvent.kind}:${originalEvent.pubkey}:$dTag"
+            finalTags.add(NDKTag("a", listOf(coordinate, "")))
+        } else {
+            // Use 'e' tag for regular events
+            finalTags.add(NDKTag("e", listOf(originalEvent.id, "")))
+        }
+
+        // Add p tag for the original author
+        finalTags.add(NDKTag("p", listOf(originalEvent.pubkey)))
+
+        // Add k tag for non-kind-1 events
+        if (originalEvent.kind != KIND_TEXT_NOTE) {
+            finalTags.add(NDKTag("k", listOf(originalEvent.kind.toString())))
+        }
+
+        // Add any custom tags
+        finalTags.addAll(tags)
+
+        // Content is the JSON of the original event (if not protected)
+        val content = originalEvent.toJson()
+
+        val unsigned = UnsignedEvent(
+            pubkey = signer.pubkey,
+            createdAt = System.currentTimeMillis() / 1000,
+            kind = repostKind,
+            tags = finalTags,
+            content = content
+        )
+        return signer.sign(unsigned)
+    }
+}
+
+/**
+ * Extension function to create a reply to this event.
+ */
+fun NDKEvent.reply() = ReplyBuilder(this)
+
+/**
+ * Extension function to create a quote of this event.
+ */
+fun NDKEvent.quote() = QuoteBuilder(this)
+
+/**
+ * Extension function to create a repost of this event.
+ */
+fun NDKEvent.repost() = RepostBuilder(this)

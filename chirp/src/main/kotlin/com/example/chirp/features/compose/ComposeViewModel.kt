@@ -1,10 +1,13 @@
 package com.example.chirp.features.compose
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.nostr.ndk.NDK
+import io.nostr.ndk.builders.reply
 import io.nostr.ndk.builders.textNote
+import io.nostr.ndk.models.NDKFilter
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -14,11 +17,46 @@ import javax.inject.Inject
 
 @HiltViewModel
 class ComposeViewModel @Inject constructor(
-    private val ndk: NDK
+    val ndk: NDK,
+    savedStateHandle: SavedStateHandle
 ) : ViewModel() {
+
+    private val replyToId: String? = savedStateHandle["replyTo"]
 
     private val _state = MutableStateFlow(ComposeState())
     val state: StateFlow<ComposeState> = _state.asStateFlow()
+
+    init {
+        replyToId?.let { loadReplyToEvent(it) }
+    }
+
+    private fun loadReplyToEvent(eventId: String) {
+        viewModelScope.launch {
+            _state.update { it.copy(isLoadingReplyTo = true) }
+            try {
+                val filter = NDKFilter(ids = setOf(eventId))
+                val subscription = ndk.subscribe(filter)
+
+                launch {
+                    subscription.events.collect { event ->
+                        _state.update {
+                            it.copy(
+                                replyToEvent = event,
+                                isLoadingReplyTo = false
+                            )
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                _state.update {
+                    it.copy(
+                        isLoadingReplyTo = false,
+                        error = "Failed to load event: ${e.message}"
+                    )
+                }
+            }
+        }
+    }
 
     fun onIntent(intent: ComposeIntent) {
         when (intent) {
@@ -50,9 +88,17 @@ class ComposeViewModel @Inject constructor(
                     return@launch
                 }
 
-                val event = ndk.textNote()
-                    .content(content)
-                    .build(currentUser.signer)
+                val event = if (_state.value.replyToEvent != null) {
+                    // Use reply builder for replies
+                    _state.value.replyToEvent!!.reply()
+                        .content(content)
+                        .build(currentUser.signer)
+                } else {
+                    // Use textNote builder for new notes
+                    ndk.textNote()
+                        .content(content)
+                        .build(currentUser.signer)
+                }
 
                 // Publish to all connected relays
                 ndk.publish(event)

@@ -15,7 +15,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
-    private val ndk: NDK
+    val ndk: NDK
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(HomeState())
