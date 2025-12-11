@@ -394,6 +394,105 @@ class NipExtensionsTest {
         assertNull(verifier.parseIdentifier("user@"))
     }
 
+    // ========== NIP-57 LNURL Parsing Tests ==========
+
+    @Test
+    fun `lud16ToUrl converts valid lud16 to URL`() {
+        val url = lud16ToUrl("user@domain.com")
+        assertEquals("https://domain.com/.well-known/lnurlp/user", url)
+    }
+
+    @Test
+    fun `lud16ToUrl normalizes to lowercase`() {
+        val url = lud16ToUrl("USER@DOMAIN.COM")
+        assertEquals("https://domain.com/.well-known/lnurlp/user", url)
+    }
+
+    @Test
+    fun `lud16ToUrl returns null for invalid format`() {
+        assertNull(lud16ToUrl("invalid"))
+        assertNull(lud16ToUrl("no-at-sign"))
+        assertNull(lud16ToUrl("@nodomain"))
+        assertNull(lud16ToUrl("user@"))
+        assertNull(lud16ToUrl(""))
+    }
+
+    @Test
+    fun `decodeLnurl decodes valid bech32 LNURL`() {
+        // lnurl1dp68gurn8ghj7um9wfmxjcm99e3k7mf09emk2mrv944kummhdchkcmn4wfk8qtm4wdjhyxj3syv
+        // decodes to: https://service.com/.well-known/lnurlp/user
+        val lnurl = "lnurl1dp68gurn8ghj7um9wfmxjcm99e3k7mf09emk2mrv944kummhdchkcmn4wfk8qtm4wdjhyxj3syv"
+        val url = decodeLnurl(lnurl)
+        assertEquals("https://service.com/.well-known/lnurlp/user", url)
+    }
+
+    @Test
+    fun `decodeLnurl handles uppercase`() {
+        // Should handle uppercase by converting to lowercase first
+        val lnurl = "LNURL1DP68GURN8GHJ7UM9WFMXJCM99E3K7MF09EMK2MRV944KUMMHDCHKCMN4WFK8QTM4WDJHYXJ3SYV"
+        val url = decodeLnurl(lnurl)
+        assertEquals("https://service.com/.well-known/lnurlp/user", url)
+    }
+
+    @Test
+    fun `decodeLnurl returns null for invalid bech32`() {
+        assertNull(decodeLnurl("invalid"))
+        assertNull(decodeLnurl(""))
+        assertNull(decodeLnurl("notlnurl1234567890"))
+    }
+
+    @Test
+    fun `resolveLnurlEndpoint prefers lud16 over lud06`() {
+        val url = resolveLnurlEndpoint(
+            lud16 = "user@domain.com",
+            lud06 = "lnurl1dp68gurn8ghj7um9wfmxjcm99e3k7mf09emk2mrv944kummhdchkcmn4wfk8qtm4wdjhyxj3syv"
+        )
+        assertEquals("https://domain.com/.well-known/lnurlp/user", url)
+    }
+
+    @Test
+    fun `resolveLnurlEndpoint falls back to lud06 when lud16 is null`() {
+        val url = resolveLnurlEndpoint(
+            lud16 = null,
+            lud06 = "lnurl1dp68gurn8ghj7um9wfmxjcm99e3k7mf09emk2mrv944kummhdchkcmn4wfk8qtm4wdjhyxj3syv"
+        )
+        assertEquals("https://service.com/.well-known/lnurlp/user", url)
+    }
+
+    @Test
+    fun `resolveLnurlEndpoint returns null when both are null`() {
+        assertNull(resolveLnurlEndpoint(lud16 = null, lud06 = null))
+    }
+
+    @Test
+    fun `resolveLnurlEndpoint returns null when both are invalid`() {
+        assertNull(resolveLnurlEndpoint(lud16 = "invalid", lud06 = "invalid"))
+    }
+
+    @Test
+    fun `zapEndpoint extracts LNURL from zap tag`() {
+        val event = createEvent(
+            kind = 1,
+            tags = listOf(NDKTag("zap", listOf("user@domain.com")))
+        )
+        assertEquals("https://domain.com/.well-known/lnurlp/user", event.zapEndpoint)
+    }
+
+    @Test
+    fun `zapEndpoint returns null when no zap tag`() {
+        val event = createEvent(kind = 1, tags = emptyList())
+        assertNull(event.zapEndpoint)
+    }
+
+    @Test
+    fun `zapEndpoint handles bech32 LNURL in zap tag`() {
+        val event = createEvent(
+            kind = 1,
+            tags = listOf(NDKTag("zap", listOf("lnurl1dp68gurn8ghj7um9wfmxjcm99e3k7mf09emk2mrv944kummhdchkcmn4wfk8qtm4wdjhyxj3syv")))
+        )
+        assertEquals("https://service.com/.well-known/lnurlp/user", event.zapEndpoint)
+    }
+
     // Helper function to create test events
     private fun createEvent(
         kind: Int,

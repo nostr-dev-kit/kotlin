@@ -5,6 +5,7 @@ import com.fasterxml.jackson.module.kotlin.readValue
 import io.nostr.ndk.models.EventId
 import io.nostr.ndk.models.NDKEvent
 import io.nostr.ndk.models.PublicKey
+import io.nostr.ndk.utils.Bech32
 
 /**
  * NIP-57: Lightning Zaps
@@ -229,3 +230,75 @@ val NDKEvent.zapReceiptAmountMillisats: Long?
  */
 val NDKEvent.zapReceiptAmountSats: Long?
     get() = zapReceiptAmountMillisats?.div(1000)
+
+/**
+ * Converts a Lightning Address (LUD-16) to a LNURL-pay endpoint URL.
+ *
+ * Example: "user@domain.com" -> "https://domain.com/.well-known/lnurlp/user"
+ *
+ * @param lud16 Lightning address in the format "user@domain.com"
+ * @return LNURL-pay endpoint URL, or null if the format is invalid
+ */
+fun lud16ToUrl(lud16: String): String? {
+    if (lud16.isEmpty()) return null
+
+    val parts = lud16.lowercase().split("@")
+    if (parts.size != 2) return null
+
+    val user = parts[0]
+    val domain = parts[1]
+
+    if (user.isEmpty() || domain.isEmpty()) return null
+
+    return "https://$domain/.well-known/lnurlp/$user"
+}
+
+/**
+ * Decodes a bech32-encoded LNURL to its underlying URL.
+ *
+ * LNURL uses bech32 encoding with hrp "lnurl".
+ *
+ * @param lnurl Bech32-encoded LNURL string
+ * @return Decoded URL, or null if decoding fails
+ */
+fun decodeLnurl(lnurl: String): String? {
+    if (lnurl.isEmpty()) return null
+
+    return try {
+        val decoded = Bech32.decode(lnurl.lowercase())
+        if (decoded.hrp != "lnurl") return null
+
+        String(decoded.data, Charsets.UTF_8)
+    } catch (e: Exception) {
+        null
+    }
+}
+
+/**
+ * Resolves a LNURL endpoint from LUD-16 (Lightning Address) or LUD-06 (bech32 LNURL).
+ *
+ * Prefers lud16 over lud06 if both are provided.
+ *
+ * @param lud16 Lightning address (e.g., "user@domain.com")
+ * @param lud06 Bech32-encoded LNURL
+ * @return Resolved LNURL endpoint URL, or null if both are null or invalid
+ */
+fun resolveLnurlEndpoint(lud16: String?, lud06: String?): String? {
+    lud16?.let { lud16ToUrl(it) }?.let { return it }
+    lud06?.let { decodeLnurl(it) }?.let { return it }
+    return null
+}
+
+/**
+ * Gets the LNURL endpoint from an event's zap tag.
+ *
+ * The zap tag can contain either a Lightning Address (LUD-16) or bech32 LNURL (LUD-06).
+ * This extension automatically handles both formats.
+ *
+ * @return Resolved LNURL endpoint URL, or null if no zap tag or invalid format
+ */
+val NDKEvent.zapEndpoint: String?
+    get() {
+        val zapValue = tagValue("zap") ?: return null
+        return resolveLnurlEndpoint(lud16 = zapValue, lud06 = zapValue)
+    }
