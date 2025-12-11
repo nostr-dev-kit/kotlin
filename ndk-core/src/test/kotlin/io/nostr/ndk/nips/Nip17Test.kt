@@ -312,4 +312,96 @@ class Nip17Test {
         val recipients = unwrapped.dmRecipients
         assertTrue("Should include recipient", recipients.contains(recipientKeyPair.pubkeyHex))
     }
+
+    @Test
+    fun `isDmRelayList returns true for kind 10050`() = runTest {
+        val senderKeyPair = NDKKeyPair.generate()
+        val signer = NDKPrivateKeySigner(senderKeyPair)
+
+        val unsigned = createDmRelayList(listOf("wss://relay1.example.com"))
+        val event = signer.sign(unsigned)
+
+        assertTrue("Kind 10050 should be DM relay list", event.isDmRelayList)
+    }
+
+    @Test
+    fun `isDmRelayList returns false for other kinds`() = runTest {
+        val senderKeyPair = NDKKeyPair.generate()
+        val signer = NDKPrivateKeySigner(senderKeyPair)
+
+        val unsigned = createPrivateMessage(
+            recipientPubkey = "recipient123",
+            content = "Test"
+        )
+        val event = signer.sign(unsigned)
+
+        assertFalse("Kind 14 should not be DM relay list", event.isDmRelayList)
+    }
+
+    @Test
+    fun `dmRelays extracts relay URLs from tags`() = runTest {
+        val senderKeyPair = NDKKeyPair.generate()
+        val signer = NDKPrivateKeySigner(senderKeyPair)
+
+        val relay1 = "wss://relay1.example.com"
+        val relay2 = "wss://relay2.example.com"
+        val relay3 = "wss://relay3.example.com"
+
+        val unsigned = createDmRelayList(listOf(relay1, relay2, relay3))
+        val event = signer.sign(unsigned)
+
+        val relays = event.dmRelays
+        assertEquals("Should extract all relays", 3, relays.size)
+        assertTrue("Should include relay1", relays.contains(relay1))
+        assertTrue("Should include relay2", relays.contains(relay2))
+        assertTrue("Should include relay3", relays.contains(relay3))
+    }
+
+    @Test
+    fun `dmRelays returns empty list when no relay tags`() = runTest {
+        val senderKeyPair = NDKKeyPair.generate()
+        val signer = NDKPrivateKeySigner(senderKeyPair)
+
+        val unsigned = createPrivateMessage(
+            recipientPubkey = "recipient123",
+            content = "Test"
+        )
+        val event = signer.sign(unsigned)
+
+        val relays = event.dmRelays
+        assertEquals("Should return empty list", 0, relays.size)
+    }
+
+    @Test
+    fun `createDmRelayList creates kind 10050 event`() = runTest {
+        val relays = listOf("wss://relay1.example.com", "wss://relay2.example.com")
+
+        val unsigned = createDmRelayList(relays)
+
+        assertEquals("Should create kind 10050", KIND_DM_RELAY_LIST, unsigned.kind)
+        assertEquals("Content should be empty", "", unsigned.content)
+    }
+
+    @Test
+    fun `createDmRelayList includes relay tags`() = runTest {
+        val relay1 = "wss://relay1.example.com"
+        val relay2 = "wss://relay2.example.com"
+        val relays = listOf(relay1, relay2)
+
+        val unsigned = createDmRelayList(relays)
+
+        val relayTags = unsigned.tags.filter { it.name == "relay" }
+        assertEquals("Should have two relay tags", 2, relayTags.size)
+        assertEquals("First relay tag should contain relay1", relay1, relayTags[0].values[0])
+        assertEquals("Second relay tag should contain relay2", relay2, relayTags[1].values[0])
+    }
+
+    @Test
+    fun `createDmRelayList handles empty relay list`() = runTest {
+        val unsigned = createDmRelayList(emptyList())
+
+        assertEquals("Should create kind 10050", KIND_DM_RELAY_LIST, unsigned.kind)
+        val relayTags = unsigned.tags.filter { it.name == "relay" }
+        assertEquals("Should have no relay tags", 0, relayTags.size)
+    }
 }

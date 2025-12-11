@@ -44,6 +44,12 @@ val NDKEvent.isPrivateFileMessage: Boolean
     get() = kind == KIND_PRIVATE_FILE_MESSAGE
 
 /**
+ * Returns true if this event is a DM relay list (kind 10050).
+ */
+val NDKEvent.isDmRelayList: Boolean
+    get() = kind == KIND_DM_RELAY_LIST
+
+/**
  * Returns all recipient public keys from p tags.
  */
 val NDKEvent.dmRecipients: List<PublicKey>
@@ -54,6 +60,12 @@ val NDKEvent.dmRecipients: List<PublicKey>
  */
 val NDKEvent.dmSubject: String?
     get() = tagValue("subject")
+
+/**
+ * Returns all DM relay URLs from relay tags.
+ */
+val NDKEvent.dmRelays: List<String>
+    get() = tagsWithName("relay").mapNotNull { it.values.firstOrNull() }
 
 /**
  * Returns the event ID being replied to from e tag with "reply" marker or first e tag.
@@ -160,4 +172,30 @@ suspend fun wrapPrivateMessage(
     // Use NIP-59 gift wrap flow: seal then gift wrap
     return rumor.seal(signer, recipientPubkey)
         .giftWrap(recipientPubkey)
+}
+
+/**
+ * Creates a DM relay list event (kind 10050).
+ *
+ * Per NIP-17, this event advertises the user's preferred relays for receiving DMs.
+ * The event structure:
+ * - Kind: 10050
+ * - Tags: ["relay", "wss://relay1.example.com"], ["relay", "wss://relay2.example.com"]
+ * - Content: empty string
+ *
+ * @param relays List of relay URLs (wss://...)
+ * @return An unsigned event (kind 10050) ready to be signed and published
+ */
+fun createDmRelayList(relays: List<String>): UnsignedEvent {
+    val tags = relays.map { relay ->
+        NDKTag("relay", listOf(relay))
+    }
+
+    return UnsignedEvent(
+        pubkey = "", // Will be set by the signer
+        createdAt = System.currentTimeMillis() / 1000,
+        kind = KIND_DM_RELAY_LIST,
+        tags = tags,
+        content = ""
+    )
 }
