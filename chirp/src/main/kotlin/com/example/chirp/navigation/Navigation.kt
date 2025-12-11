@@ -8,6 +8,11 @@ import androidx.navigation.navArgument
 import androidx.navigation.NavType
 import com.example.chirp.features.onboarding.OnboardingScreen
 import com.example.chirp.features.home.HomeScreen
+import com.example.chirp.features.compose.ComposeScreen
+import com.example.chirp.features.thread.ThreadScreen
+import com.example.chirp.features.profile.ProfileScreen
+import com.example.chirp.features.search.SearchScreen
+import com.example.chirp.features.settings.SettingsScreen
 
 @Composable
 fun ChirpNavigation(
@@ -57,7 +62,11 @@ fun ChirpNavigation(
                 }
             )
         ) {
-            // Placeholder - will implement later
+            ComposeScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
         }
 
         composable(
@@ -68,7 +77,17 @@ fun ChirpNavigation(
                 }
             )
         ) {
-            // Placeholder - will implement later
+            ThreadScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                },
+                onNavigateToProfile = { pubkey ->
+                    navController.navigate(Routes.Profile.createRoute(pubkey))
+                },
+                onNavigateToThread = { eventId ->
+                    navController.navigate(Routes.Thread.createRoute(eventId))
+                }
+            )
         }
 
         composable(
@@ -79,15 +98,36 @@ fun ChirpNavigation(
                 }
             )
         ) {
-            // Placeholder - will implement later
+            ProfileScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                },
+                onNavigateToThread = { eventId ->
+                    navController.navigate(Routes.Thread.createRoute(eventId))
+                }
+            )
         }
 
         composable(Routes.Search.route) {
-            // Placeholder - will implement later
+            SearchScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                },
+                onNavigateToThread = { eventId ->
+                    navController.navigate(Routes.Thread.createRoute(eventId))
+                },
+                onNavigateToProfile = { pubkey ->
+                    navController.navigate(Routes.Profile.createRoute(pubkey))
+                }
+            )
         }
 
         composable(Routes.Settings.route) {
-            // Placeholder - will implement later
+            SettingsScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
         }
     }
 }

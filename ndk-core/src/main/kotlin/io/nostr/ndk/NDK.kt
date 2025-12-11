@@ -262,6 +262,18 @@ class NDK(
     }
 
     /**
+     * Publishes an event to all connected relays.
+     *
+     * @param event The event to publish
+     * @return List of results from each relay (success or failure)
+     */
+    suspend fun publish(event: io.nostr.ndk.models.NDKEvent): List<Result<Unit>> {
+        return pool.connectedRelays.value.map { relay ->
+            relay.publish(event)
+        }
+    }
+
+    /**
      * Triggers reconnection for all disconnected relays.
      * Useful when network connectivity is restored.
      *
