@@ -2,10 +2,7 @@ package io.nostr.ndk.nips
 
 import io.nostr.ndk.crypto.NDKKeyPair
 import io.nostr.ndk.crypto.NDKPrivateKeySigner
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -17,8 +14,30 @@ import org.junit.Test
 
 /**
  * Tests for NIP-17 Private Direct Messages functionality.
+ *
+ * Test vectors sourced from nostr-tools (https://github.com/nbd-wtf/nostr-tools)
  */
 class Nip17Test {
+
+    // Test vectors from nostr-tools nip17.test.ts
+    companion object {
+        // Sender: nsec1p0ht6p3wepe47sjrgesyn4m50m6avk2waqudu9rl324cg2c4ufesyp6rdg
+        const val SENDER_PRIVKEY = "0beebd062ec8735f4243466049d7747ef5d6594ee838de147f8aab842b15e273"
+        const val SENDER_PUBKEY = "611df01bfcf85c26ae65453b772d8f1dfd25c264621c0277e1fc1518686faef9"
+
+        // Recipient 1
+        const val RECIPIENT1_PRIVKEY = "f09ac9b695d0a4c6daa418fe95b977eea20f54d9545592bc36a4f9e14f3eb840"
+        const val RECIPIENT1_PUBKEY = "b60849e5aae4113b236f9deb34f6f85605b4c53930651309a0d60c7ea721aad0"
+
+        // Recipient 2
+        const val RECIPIENT2_PRIVKEY = "5393a825e5892d8e18d4a5ea61ced105e8bb2a106f42876be3a40522e0b13747"
+        const val RECIPIENT2_PUBKEY = "36f7288c84d85ca6aa189dc3581d63ce140b7eeef5ae759421c5b5a3627312db"
+
+        // Test message content
+        const val TEST_MESSAGE = "Hello, this is a direct message!"
+        const val TEST_SUBJECT = "Private Group Conversation"
+        const val TEST_REPLY_TO = "previousEventId123"
+    }
 
     @Test
     fun `createPrivateMessage creates kind 14 event`() = runTest {
@@ -431,5 +450,112 @@ class Nip17Test {
         val relays = ndk.fetchDmRelays(recipientKeyPair.pubkeyHex, timeoutMs = 100)
 
         assertNull("Should return null when no event found", relays)
+    }
+
+    // ========== Test Vector Tests (from nostr-tools) ==========
+
+    @Test
+    fun `test vector - createPrivateMessage with nostr-tools keys`() = runTest {
+        // Using test vectors from nostr-tools nip17.test.ts
+        val unsigned = createPrivateMessage(
+            recipientPubkey = RECIPIENT1_PUBKEY,
+            content = TEST_MESSAGE,
+            subject = TEST_SUBJECT,
+            replyTo = TEST_REPLY_TO
+        )
+
+        assertEquals("Should create kind 14", KIND_PRIVATE_MESSAGE, unsigned.kind)
+        assertEquals("Content should match test vector", TEST_MESSAGE, unsigned.content)
+
+        // Verify p tag matches expected recipient
+        val pTags = unsigned.tags.filter { it.name == "p" }
+        assertEquals("Should have one p tag", 1, pTags.size)
+        assertEquals("p tag should match test vector pubkey", RECIPIENT1_PUBKEY, pTags[0].values[0])
+
+        // Verify subject tag
+        val subjectTags = unsigned.tags.filter { it.name == "subject" }
+        assertEquals("Subject tag should match test vector", TEST_SUBJECT, subjectTags[0].values[0])
+
+        // Verify e tag with reply marker
+        val eTags = unsigned.tags.filter { it.name == "e" }
+        assertEquals("e tag should contain test vector event ID", TEST_REPLY_TO, eTags[0].values[0])
+        assertEquals("e tag should have reply marker", "reply", eTags[0].values.getOrNull(2))
+    }
+
+    @Test
+    fun `test vector - sender key derivation`() = runTest {
+        // Verify our key derivation matches nostr-tools
+        val keyPair = NDKKeyPair.fromPrivateKey(SENDER_PRIVKEY)
+        assertEquals(
+            "Derived pubkey should match nostr-tools test vector",
+            SENDER_PUBKEY,
+            keyPair.pubkeyHex
+        )
+    }
+
+    @Test
+    fun `test vector - recipient1 key derivation`() = runTest {
+        val keyPair = NDKKeyPair.fromPrivateKey(RECIPIENT1_PRIVKEY)
+        assertEquals(
+            "Derived pubkey should match nostr-tools test vector",
+            RECIPIENT1_PUBKEY,
+            keyPair.pubkeyHex
+        )
+    }
+
+    @Test
+    fun `test vector - recipient2 key derivation`() = runTest {
+        val keyPair = NDKKeyPair.fromPrivateKey(RECIPIENT2_PRIVKEY)
+        assertEquals(
+            "Derived pubkey should match nostr-tools test vector",
+            RECIPIENT2_PUBKEY,
+            keyPair.pubkeyHex
+        )
+    }
+
+    @Ignore("Requires Android runtime for LazySodium")
+    @Test
+    fun `test vector - full wrap and unwrap with nostr-tools keys`() = runTest {
+        // Full round-trip test using nostr-tools test vectors
+        val senderKeyPair = NDKKeyPair.fromPrivateKey(SENDER_PRIVKEY)
+        val senderSigner = NDKPrivateKeySigner(senderKeyPair)
+
+        val recipientKeyPair = NDKKeyPair.fromPrivateKey(RECIPIENT1_PRIVKEY)
+        val recipientSigner = NDKPrivateKeySigner(recipientKeyPair)
+
+        // Create message with test vector content
+        val unsigned = createPrivateMessage(
+            recipientPubkey = RECIPIENT1_PUBKEY,
+            content = TEST_MESSAGE,
+            subject = TEST_SUBJECT,
+            replyTo = TEST_REPLY_TO
+        )
+
+        // Wrap
+        val giftWrap = wrapPrivateMessage(unsigned, senderSigner, RECIPIENT1_PUBKEY)
+
+        // Verify gift wrap structure
+        assertEquals("Should create kind 1059 gift wrap", KIND_GIFT_WRAP, giftWrap.kind)
+        val pTags = giftWrap.tagsWithName("p")
+        assertEquals("Gift wrap p tag should have recipient", RECIPIENT1_PUBKEY, pTags[0].values[0])
+
+        // Unwrap and verify matches test vector expectations
+        val unwrapped = giftWrap.unwrapGift(recipientSigner)
+        assertNotNull("Should successfully unwrap", unwrapped)
+        assertEquals("Content should match test vector", TEST_MESSAGE, unwrapped!!.content)
+        assertEquals("Kind should be 14", KIND_PRIVATE_MESSAGE, unwrapped.kind)
+        assertEquals("Sender pubkey should match test vector", SENDER_PUBKEY, unwrapped.pubkey)
+        assertEquals("Subject should match test vector", TEST_SUBJECT, unwrapped.dmSubject)
+
+        // Verify tags match expected nostr-tools output:
+        // ["p", "b60849e5aae4113b236f9deb34f6f85605b4c53930651309a0d60c7ea721aad0", ...]
+        // ["e", "previousEventId123", "", "reply"]
+        // ["subject", "Private Group Conversation"]
+        val unwrappedPTags = unwrapped.tagsWithName("p")
+        assertTrue("Should include recipient in p tags", unwrappedPTags.any { it.values[0] == RECIPIENT1_PUBKEY })
+
+        val unwrappedETags = unwrapped.tagsWithName("e")
+        assertEquals("Should have reply e tag", TEST_REPLY_TO, unwrappedETags[0].values[0])
+        assertEquals("e tag should have reply marker", "reply", unwrappedETags[0].values.getOrNull(2))
     }
 }
