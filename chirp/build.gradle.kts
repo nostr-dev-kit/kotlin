@@ -73,8 +73,22 @@ dependencies {
     ksp("com.google.dagger:hilt-compiler:2.54")
     implementation("androidx.hilt:hilt-navigation-compose:1.1.0")
 
-    // Coil for image loading
-    implementation("io.coil-kt:coil-compose:2.5.0")
+    // Coil 3.x for image loading
+    implementation("io.coil-kt.coil3:coil:3.0.0")
+    implementation("io.coil-kt.coil3:coil-compose:3.0.0")
+    implementation("io.coil-kt.coil3:coil-network-okhttp:3.0.0")
+
+    // Blurhash for placeholders
+    implementation("com.github.woltapp:blurhash-kotlin:1.0.0")
+
+    // Telephoto for zoomable images
+    implementation("me.saket.telephoto:zoomable-image-coil:0.7.1")
+
+    // Ktor for Blossom uploads (shared with ndk-core)
+    implementation("io.ktor:ktor-client-core:2.3.7")
+    implementation("io.ktor:ktor-client-okhttp:2.3.7")
+    implementation("io.ktor:ktor-client-content-negotiation:2.3.7")
+    implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.7")
 
     // Crypto - secp256k1 JNI native library for Android
     implementation("fr.acinq.secp256k1:secp256k1-kmp-jni-android:0.21.0")
