@@ -1,6 +1,8 @@
 package com.example.chirp.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -14,6 +16,7 @@ import com.example.chirp.features.profile.ProfileScreen
 import com.example.chirp.features.search.SearchScreen
 import com.example.chirp.features.settings.SettingsScreen
 import com.example.chirp.features.images.ImageDetailScreen
+import com.example.chirp.features.images.ImageFeedViewModel
 import com.example.chirp.features.images.upload.ImageUploadScreen
 
 @Composable
@@ -125,8 +128,17 @@ fun ChirpNavigation(
             )
         ) { backStackEntry ->
             val galleryId = backStackEntry.arguments?.getString("galleryId") ?: return@composable
+
+            // Get the shared ViewModel from the Home route's back stack entry
+            val viewModel: ImageFeedViewModel = hiltViewModel(
+                viewModelStoreOwner = remember(backStackEntry) {
+                    navController.getBackStackEntry(Routes.Home.route)
+                }
+            )
+
             ImageDetailScreen(
                 galleryId = galleryId,
+                viewModel = viewModel,
                 onDismiss = {
                     navController.popBackStack()
                 }
