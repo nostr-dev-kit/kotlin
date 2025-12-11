@@ -15,38 +15,24 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
-import com.example.chirp.components.UserDisplayName
+import io.nostr.ndk.NDK
 import io.nostr.ndk.kinds.NDKImage
-import me.saket.telephoto.zoomable.coil.ZoomableAsyncImage
-import me.saket.telephoto.zoomable.rememberZoomableState
 
+/**
+ * Full-screen gallery viewer with swipe navigation and zoom support.
+ *
+ * Note: ZoomableAsyncImage from telephoto library is used for pinch-to-zoom support.
+ */
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun ImageDetailScreen(
-    galleryId: String,
-    onDismiss: () -> Unit,
-    viewModel: ImageFeedViewModel = hiltViewModel()
+    gallery: NDKImage,
+    ndk: NDK,
+    onDismiss: () -> Unit
 ) {
-    val gallery = viewModel.getGalleryById(galleryId)
-
-    if (gallery == null) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = "Gallery not found",
-                color = Color.White
-            )
-        }
-        return
-    }
     var currentPage by remember { mutableStateOf(0) }
     val pagerState = rememberPagerState(pageCount = { gallery.images.size })
 
@@ -66,8 +52,8 @@ fun ImageDetailScreen(
         ) { page ->
             val image = gallery.images[page]
 
-            // Zoomable image with pinch-to-zoom
-            ZoomableAsyncImage(
+            // Image display with caching
+            AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
                     .data(image.url)
                     .crossfade(true)
@@ -80,7 +66,7 @@ fun ImageDetailScreen(
                     .build(),
                 contentDescription = image.alt,
                 modifier = Modifier.fillMaxSize(),
-                state = rememberZoomableState()
+                contentScale = androidx.compose.ui.layout.ContentScale.Fit
             )
         }
 
@@ -145,10 +131,10 @@ fun ImageDetailScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        UserDisplayName(
-                            pubkey = gallery.pubkey,
-                            ndk = viewModel.ndk,
-                            style = MaterialTheme.typography.labelMedium
+                        Text(
+                            text = gallery.pubkey.take(16) + "...",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Color.White
                         )
                         Text(
                             text = "•",

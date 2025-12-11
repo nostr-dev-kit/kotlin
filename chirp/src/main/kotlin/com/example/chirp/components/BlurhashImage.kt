@@ -1,17 +1,26 @@
 package com.example.chirp.components
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
-import com.wolt.blurhashkt.BlurHashDecoder
 
+/**
+ * Composable for loading images with optional blurhash placeholder support.
+ *
+ * Note: Blurhash placeholder generation requires the blurhash-kotlin library.
+ * Currently placeholders are disabled until the library is available from Maven Central.
+ *
+ * @param url URL of the image to load
+ * @param blurhash Blurhash string for placeholder (currently unused due to library availability)
+ * @param contentDescription Accessibility description
+ * @param modifier Compose modifier
+ * @param contentScale How to scale the image
+ * @param cacheKey Optional cache key for Coil
+ */
 @Composable
 fun BlurhashImage(
     url: String?,
@@ -21,17 +30,6 @@ fun BlurhashImage(
     contentScale: ContentScale = ContentScale.Crop,
     cacheKey: String? = null
 ) {
-    val placeholder = remember(blurhash) {
-        blurhash?.let { hash ->
-            try {
-                val bitmap = BlurHashDecoder.decode(hash, 32, 32)
-                bitmap?.let { BitmapPainter(it.asImageBitmap()) }
-            } catch (e: Exception) {
-                null
-            }
-        }
-    }
-
     AsyncImage(
         model = ImageRequest.Builder(LocalContext.current)
             .data(url)
@@ -45,7 +43,6 @@ fun BlurhashImage(
             .build(),
         contentDescription = contentDescription,
         modifier = modifier,
-        contentScale = contentScale,
-        placeholder = placeholder
+        contentScale = contentScale
     )
 }

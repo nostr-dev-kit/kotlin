@@ -79,7 +79,8 @@ dependencies {
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.0.0")
 
     // Blurhash for placeholders
-    implementation("com.github.woltapp:blurhash-kotlin:1.0.0")
+    // NOTE: blurhash library needs to be sourced from JitPack or GitHub Packages
+    // implementation("com.github.woltapp:blurhash-kotlin:1.0.0")
 
     // Telephoto for zoomable images
     implementation("me.saket.telephoto:zoomable-image-coil:0.7.1")

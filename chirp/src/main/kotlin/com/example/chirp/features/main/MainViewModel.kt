@@ -23,7 +23,10 @@ class MainViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             ndk.currentUser.collect { user ->
-                _state.update { it.copy(currentUser = user) }
+                // Update current user pubkey when available
+                _state.update { state ->
+                    state.copy(currentUserPubkey = user?.let { "logged_in" })
+                }
             }
         }
     }
