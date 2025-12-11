@@ -78,7 +78,7 @@ class NDKSubscription(
     val cacheEose: StateFlow<Boolean> = _cacheEose.asStateFlow()
 
     // Coroutine scope for cache operations
-    private val cacheScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val cacheScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     // Set of relays this subscription is active on
     private var activeRelays: Set<NDKRelay> = emptySet()

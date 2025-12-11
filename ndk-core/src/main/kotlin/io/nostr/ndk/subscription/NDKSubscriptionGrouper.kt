@@ -32,7 +32,7 @@ internal class NDKSubscriptionGrouper(
     private val groupingDelayMs: Long = 100
 ) {
     // Coroutine scope for grouper operations
-    private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     // Channel for pending subscriptions
     private val pendingChannel = Channel<PendingSubscription>(Channel.UNLIMITED)

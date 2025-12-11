@@ -22,6 +22,17 @@ class OnboardingViewModel @Inject constructor(
     private val _state = MutableStateFlow(OnboardingState())
     val state: StateFlow<OnboardingState> = _state.asStateFlow()
 
+    init {
+        // Check if user is already logged in
+        viewModelScope.launch {
+            ndk.currentUser.collect { currentUser ->
+                if (currentUser != null) {
+                    _state.update { it.copy(isLoggedIn = true) }
+                }
+            }
+        }
+    }
+
     fun onIntent(intent: OnboardingIntent) {
         when (intent) {
             OnboardingIntent.CreateAccount -> createAccount()

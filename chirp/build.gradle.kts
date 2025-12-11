@@ -1,8 +1,7 @@
 plugins {
     id("com.android.application")
     id("kotlin-android")
-    id("org.jetbrains.kotlin.plugin.compose") version "2.1.0"
-    id("com.google.devtools.ksp") version "2.1.0-1.0.29"
+    id("com.google.devtools.ksp") version "1.9.25-1.0.20"
     id("dagger.hilt.android.plugin")
 }
 
@@ -33,6 +32,10 @@ android {
         compose = true
     }
 
+    composeOptions {
+        kotlinCompilerExtensionVersion = "1.5.15"
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -48,8 +51,8 @@ dependencies {
     implementation(project(":ndk-account-android"))
 
     // Kotlin
-    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.1.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+    implementation("org.jetbrains.kotlin:kotlin-stdlib:1.9.25")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
     // Android Core
     implementation("androidx.core:core-ktx:1.12.0")
@@ -78,13 +81,13 @@ dependencies {
 
     // Testing
     testImplementation("junit:junit:4.13.2")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
     testImplementation("org.robolectric:robolectric:4.11.1")
     testImplementation("androidx.test:core:1.5.0")
-    testImplementation("org.jetbrains.kotlin:kotlin-test:2.1.0")
+    testImplementation("org.jetbrains.kotlin:kotlin-test:1.9.25")
     testImplementation("org.mockito.kotlin:mockito-kotlin:5.2.1")
     testImplementation("org.mockito:mockito-inline:5.2.0")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
     androidTestImplementation(platform("androidx.compose:compose-bom:2024.02.00"))

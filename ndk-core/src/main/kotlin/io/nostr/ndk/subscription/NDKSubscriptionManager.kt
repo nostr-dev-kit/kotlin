@@ -35,7 +35,7 @@ internal class NDKSubscriptionManager(
     groupingDelayMs: Long = 100
 ) {
     // Coroutine scope for cache operations
-    private val cacheScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val cacheScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     // Subscription grouper for combining similar subscriptions
     internal val grouper = NDKSubscriptionGrouper(ndk, groupingDelayMs)
