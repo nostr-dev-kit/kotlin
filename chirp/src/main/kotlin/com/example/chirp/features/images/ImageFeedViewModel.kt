@@ -16,7 +16,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class ImageFeedViewModel @Inject constructor(
-    private val ndk: NDK
+    val ndk: NDK
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ImageFeedState())
@@ -24,6 +24,10 @@ class ImageFeedViewModel @Inject constructor(
 
     init {
         subscribeToImageGalleries()
+    }
+
+    fun getGalleryById(galleryId: String): NDKImage? {
+        return _state.value.galleries.find { it.id == galleryId }
     }
 
     private fun subscribeToImageGalleries() {

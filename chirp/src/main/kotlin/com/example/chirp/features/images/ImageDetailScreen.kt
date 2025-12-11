@@ -15,11 +15,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.example.chirp.components.UserDisplayName
-import io.nostr.ndk.NDK
 import io.nostr.ndk.kinds.NDKImage
 import me.saket.telephoto.zoomable.coil.ZoomableAsyncImage
 import me.saket.telephoto.zoomable.rememberZoomableState
@@ -27,10 +27,26 @@ import me.saket.telephoto.zoomable.rememberZoomableState
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun ImageDetailScreen(
-    gallery: NDKImage,
-    ndk: NDK,
-    onDismiss: () -> Unit
+    galleryId: String,
+    onDismiss: () -> Unit,
+    viewModel: ImageFeedViewModel = hiltViewModel()
 ) {
+    val gallery = viewModel.getGalleryById(galleryId)
+
+    if (gallery == null) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "Gallery not found",
+                color = Color.White
+            )
+        }
+        return
+    }
     var currentPage by remember { mutableStateOf(0) }
     val pagerState = rememberPagerState(pageCount = { gallery.images.size })
 
@@ -131,7 +147,7 @@ fun ImageDetailScreen(
                     ) {
                         UserDisplayName(
                             pubkey = gallery.pubkey,
-                            ndk = ndk,
+                            ndk = viewModel.ndk,
                             style = MaterialTheme.typography.labelMedium
                         )
                         Text(
