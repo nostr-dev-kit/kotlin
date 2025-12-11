@@ -6,6 +6,8 @@ import io.nostr.ndk.models.EventId
 import io.nostr.ndk.models.NDKEvent
 import io.nostr.ndk.models.NDKTag
 import io.nostr.ndk.models.PublicKey
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * NIP-17: Private Direct Messages
@@ -198,4 +200,70 @@ fun createDmRelayList(relays: List<String>): UnsignedEvent {
         tags = tags,
         content = ""
     )
+}
+
+/**
+ * Fetch recipient's preferred DM relays from their kind 10050 event.
+ * Returns null if no DM relay list is found within the timeout period.
+ *
+ * @param pubkey The public key of the recipient
+ * @param timeoutMs Timeout in milliseconds (default: 5000ms)
+ */
+suspend fun io.nostr.ndk.NDK.fetchDmRelays(pubkey: String, timeoutMs: Long = 5000): List<String>? {
+    val filter = io.nostr.ndk.models.NDKFilter(
+        kinds = setOf(KIND_DM_RELAY_LIST),
+        authors = setOf(pubkey),
+        limit = 1
+    )
+
+    val subscription = subscribe(filter)
+
+    return try {
+        withTimeoutOrNull(timeoutMs) {
+            subscription.events.first()
+        }?.dmRelays
+    } finally {
+        subscription.stop()
+    }
+}
+
+/**
+ * Send a private message to a recipient.
+ *
+ * This is the high-level API that:
+ * 1. Fetches recipient's DM relay preferences (kind 10050)
+ * 2. Creates and wraps the private message
+ * 3. Publishes to the recipient's preferred relays
+ *
+ * @return The gift-wrapped event that was published, or null if recipient has no DM relays
+ */
+suspend fun io.nostr.ndk.NDK.sendPrivateMessage(
+    signer: NDKPrivateKeySigner,
+    recipientPubkey: String,
+    content: String,
+    subject: String? = null,
+    replyTo: EventId? = null
+): NDKEvent? {
+    // 1. Fetch recipient's preferred DM relays
+    val dmRelays = fetchDmRelays(recipientPubkey) ?: return null
+
+    if (dmRelays.isEmpty()) return null
+
+    // 2. Create and wrap the private message
+    val message = createPrivateMessage(
+        recipientPubkey = recipientPubkey,
+        content = content,
+        subject = subject,
+        replyTo = replyTo
+    )
+
+    val giftWrap = wrapPrivateMessage(message, signer, recipientPubkey)
+
+    // 3. Publish to recipient's preferred relays
+    dmRelays.forEach { relayUrl ->
+        val relay = pool.getRelay(relayUrl) ?: pool.addRelay(relayUrl, connect = true)
+        relay.publish(giftWrap)
+    }
+
+    return giftWrap
 }
