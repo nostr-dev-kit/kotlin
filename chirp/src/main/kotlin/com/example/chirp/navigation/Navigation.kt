@@ -18,10 +18,15 @@ import com.example.chirp.features.profile.ProfileScreen
 import com.example.chirp.features.search.SearchScreen
 import com.example.chirp.features.settings.SettingsScreen
 import com.example.chirp.features.debug.DebugScreen
+import com.example.chirp.features.debug.DeveloperToolsScreen
+import com.example.chirp.features.debug.RelayMonitorScreen
+import com.example.chirp.features.debug.NostrDBStatsScreen
+import com.example.chirp.features.debug.SubscriptionsScreen
 import com.example.chirp.features.settings.ContentRenderSettingsScreen
 import com.example.chirp.features.images.ImageDetailScreen
 import com.example.chirp.features.images.ImageFeedViewModel
 import com.example.chirp.features.images.upload.ImageUploadScreen
+import com.example.chirp.features.videos.record.VideoRecordScreen
 
 @Composable
 fun ChirpNavigation(
@@ -134,8 +139,8 @@ fun ChirpNavigation(
                 onNavigateBack = {
                     navController.popBackStack()
                 },
-                onNavigateToDebug = {
-                    navController.navigate(Routes.Debug.route)
+                onNavigateToDeveloperTools = {
+                    navController.navigate(Routes.DeveloperTools.route)
                 },
                 onNavigateToContentRendererSettings = {
                     navController.navigate(Routes.ContentRendererSettings.route)
@@ -148,6 +153,50 @@ fun ChirpNavigation(
 
         composable(Routes.Debug.route) {
             DebugScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(Routes.DeveloperTools.route) {
+            DeveloperToolsScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                },
+                onNavigateToRelayMonitor = {
+                    navController.navigate(Routes.RelayMonitor.route)
+                },
+                onNavigateToNostrDBStats = {
+                    navController.navigate(Routes.NostrDBStats.route)
+                },
+                onNavigateToSubscriptions = {
+                    navController.navigate(Routes.Subscriptions.route)
+                },
+                onNavigateToOutboxMetrics = {
+                    navController.navigate(Routes.Debug.route)
+                }
+            )
+        }
+
+        composable(Routes.RelayMonitor.route) {
+            RelayMonitorScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(Routes.NostrDBStats.route) {
+            NostrDBStatsScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(Routes.Subscriptions.route) {
+            SubscriptionsScreen(
                 onNavigateBack = {
                     navController.popBackStack()
                 }
@@ -205,6 +254,14 @@ fun ChirpNavigation(
 
         composable(Routes.ImageUpload.route) {
             ImageUploadScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(Routes.VideoRecord.route) {
+            VideoRecordScreen(
                 onNavigateBack = {
                     navController.popBackStack()
                 }

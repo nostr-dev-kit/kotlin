@@ -14,7 +14,7 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun SettingsScreen(
     onNavigateBack: () -> Unit = {},
-    onNavigateToDebug: () -> Unit = {},
+    onNavigateToDeveloperTools: () -> Unit = {},
     onNavigateToContentRendererSettings: () -> Unit = {},
     onNavigateToRelaySettings: () -> Unit = {}
 ) {
@@ -119,28 +119,20 @@ fun SettingsScreen(
             }
 
             Card(
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onNavigateToDeveloperTools)
             ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        text = "Developer",
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                    Text(
-                        text = "Debug tools for monitoring NDK internals",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    OutlinedButton(
-                        onClick = onNavigateToDebug,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Outbox Debug")
+                ListItem(
+                    headlineContent = { Text("Developer Tools") },
+                    supportingContent = { Text("Relay monitor, database stats, subscriptions, outbox metrics") },
+                    trailingContent = {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = "Navigate to Developer Tools"
+                        )
                     }
-                }
+                )
             }
         }
     }

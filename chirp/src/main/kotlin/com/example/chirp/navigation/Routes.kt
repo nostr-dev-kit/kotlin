@@ -19,10 +19,15 @@ sealed class Routes(val route: String) {
     }
     data object Settings : Routes("settings")
     data object Debug : Routes("debug")
+    data object DeveloperTools : Routes("developer_tools")
+    data object RelayMonitor : Routes("developer_tools/relay_monitor")
+    data object NostrDBStats : Routes("developer_tools/nostrdb_stats")
+    data object Subscriptions : Routes("developer_tools/subscriptions")
     data object ContentRendererSettings : Routes("settings/content_renderer")
     data object RelaySettings : Routes("settings/relays")
     data object ImageDetail : Routes("image_detail/{galleryId}") {
         fun createRoute(galleryId: String): String = "image_detail/$galleryId"
     }
     data object ImageUpload : Routes("image_upload")
+    data object VideoRecord : Routes("video_record")
 }

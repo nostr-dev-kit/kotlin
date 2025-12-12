@@ -22,7 +22,8 @@ import java.io.Closeable
  * ```
  */
 class NostrDB private constructor(
-    @PublishedApi internal val ndbPtr: Long
+    @PublishedApi internal val ndbPtr: Long,
+    private val dbPath: String
 ) : Closeable {
 
     companion object {
@@ -57,7 +58,7 @@ class NostrDB private constructor(
                 throw IllegalStateException("Failed to initialize NostrDB at $dbPath")
             }
             Log.i(TAG, "NostrDB opened at $dbPath")
-            return NostrDB(ptr)
+            return NostrDB(ptr, dbPath)
         }
 
         // Native methods - internal for access from inline functions and NdbFilter
@@ -167,6 +168,27 @@ class NostrDB private constructor(
         @JvmStatic
         @JvmName("nativeNoteSig")
         internal external fun nativeNoteSig(ndbPtr: Long, txnPtr: Long, noteKey: Long): ByteArray?
+
+        // Statistics native methods
+        @JvmStatic
+        @JvmName("nativeGetStats")
+        internal external fun nativeGetStats(ndbPtr: Long): LongArray?
+
+        @JvmStatic
+        @JvmName("nativeGetDbName")
+        internal external fun nativeGetDbName(dbIndex: Int): String?
+
+        @JvmStatic
+        @JvmName("nativeGetCommonKindName")
+        internal external fun nativeGetCommonKindName(kindIndex: Int): String?
+
+        @JvmStatic
+        @JvmName("nativeGetDbCount")
+        internal external fun nativeGetDbCount(): Int
+
+        @JvmStatic
+        @JvmName("nativeGetCommonKindCount")
+        internal external fun nativeGetCommonKindCount(): Int
     }
 
     private var closed = false
@@ -281,6 +303,32 @@ class NostrDB private constructor(
         checkNotClosed()
         return nativeUnsubscribe(ndbPtr, subId)
     }
+
+    /**
+     * Get database statistics.
+     *
+     * @return NdbStats containing counts and sizes for all databases and event kinds,
+     *         or null if statistics couldn't be retrieved
+     */
+    fun getStats(): NdbStats? {
+        checkNotClosed()
+        val rawStats = nativeGetStats(ndbPtr) ?: return null
+        val dbCount = nativeGetDbCount()
+        val kindCount = nativeGetCommonKindCount()
+
+        return NdbStats.fromRawArray(
+            rawStats = rawStats,
+            dbCount = dbCount,
+            kindCount = kindCount,
+            getDbName = { nativeGetDbName(it) },
+            getKindName = { nativeGetCommonKindName(it) }
+        )
+    }
+
+    /**
+     * Get the path to the database directory.
+     */
+    fun getDatabasePath(): String = dbPath
 
     override fun close() {
         if (!closed) {

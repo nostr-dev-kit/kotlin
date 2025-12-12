@@ -732,3 +732,139 @@ Java_io_nostr_ndk_cache_nostrdb_NostrDB_nativeNoteSig(
 
     return result;
 }
+
+// ============== Statistics API ==============
+
+/**
+ * Get database statistics.
+ * Returns a long array with the following structure:
+ * [0-47]: Database stats (16 DBs * 3 values: count, key_size, value_size)
+ * [48-92]: Common kind stats (15 kinds * 3 values)
+ * [93-95]: Other kinds stats (3 values)
+ * Total: 96 longs
+ */
+JNIEXPORT jlongArray JNICALL
+Java_io_nostr_ndk_cache_nostrdb_NostrDB_nativeGetStats(
+    JNIEnv *env,
+    jobject thiz,
+    jlong ndb_ptr
+) {
+    struct ndb *ndb = (struct ndb *)(intptr_t)ndb_ptr;
+    if (!ndb) return NULL;
+
+    struct ndb_stat stat;
+    if (ndb_stat(ndb, &stat) != 1) {
+        LOGE("ndb_stat failed");
+        return NULL;
+    }
+
+    // Calculate total size: 16 DBs + 15 common kinds + 1 other = 32 entries * 3 values = 96
+    // But NDB_DBS = 16, NDB_CKIND_COUNT = 15
+    int total_values = (NDB_DBS * 3) + (NDB_CKIND_COUNT * 3) + 3;
+
+    jlongArray result = (*env)->NewLongArray(env, total_values);
+    if (!result) return NULL;
+
+    jlong *values = malloc(sizeof(jlong) * total_values);
+    if (!values) {
+        return NULL;
+    }
+
+    int idx = 0;
+
+    // Database stats (16 DBs)
+    for (int i = 0; i < NDB_DBS; i++) {
+        values[idx++] = (jlong)stat.dbs[i].count;
+        values[idx++] = (jlong)stat.dbs[i].key_size;
+        values[idx++] = (jlong)stat.dbs[i].value_size;
+    }
+
+    // Common kind stats (15 kinds)
+    for (int i = 0; i < NDB_CKIND_COUNT; i++) {
+        values[idx++] = (jlong)stat.common_kinds[i].count;
+        values[idx++] = (jlong)stat.common_kinds[i].key_size;
+        values[idx++] = (jlong)stat.common_kinds[i].value_size;
+    }
+
+    // Other kinds stats
+    values[idx++] = (jlong)stat.other_kinds.count;
+    values[idx++] = (jlong)stat.other_kinds.key_size;
+    values[idx++] = (jlong)stat.other_kinds.value_size;
+
+    (*env)->SetLongArrayRegion(env, result, 0, total_values, values);
+    free(values);
+
+    return result;
+}
+
+/**
+ * Get database name by index.
+ */
+JNIEXPORT jstring JNICALL
+Java_io_nostr_ndk_cache_nostrdb_NostrDB_nativeGetDbName(
+    JNIEnv *env,
+    jobject thiz,
+    jint db_index
+) {
+    if (db_index < 0 || db_index >= NDB_DBS) return NULL;
+
+    const char *name = ndb_db_name((enum ndb_dbs)db_index);
+    if (!name) return NULL;
+
+    return (*env)->NewStringUTF(env, name);
+}
+
+/**
+ * Get common kind name by index.
+ */
+JNIEXPORT jstring JNICALL
+Java_io_nostr_ndk_cache_nostrdb_NostrDB_nativeGetCommonKindName(
+    JNIEnv *env,
+    jobject thiz,
+    jint kind_index
+) {
+    // Map kind index to human-readable name
+    const char *names[] = {
+        "Profile",      // NDB_CKIND_PROFILE
+        "Text",         // NDB_CKIND_TEXT
+        "Contacts",     // NDB_CKIND_CONTACTS
+        "DM",           // NDB_CKIND_DM
+        "Delete",       // NDB_CKIND_DELETE
+        "Repost",       // NDB_CKIND_REPOST
+        "Reaction",     // NDB_CKIND_REACTION
+        "Zap",          // NDB_CKIND_ZAP
+        "Zap Request",  // NDB_CKIND_ZAP_REQUEST
+        "NWC Request",  // NDB_CKIND_NWC_REQUEST
+        "NWC Response", // NDB_CKIND_NWC_RESPONSE
+        "HTTP Auth",    // NDB_CKIND_HTTP_AUTH
+        "List",         // NDB_CKIND_LIST
+        "Long-form",    // NDB_CKIND_LONGFORM
+        "Status"        // NDB_CKIND_STATUS
+    };
+
+    if (kind_index < 0 || kind_index >= NDB_CKIND_COUNT) return NULL;
+
+    return (*env)->NewStringUTF(env, names[kind_index]);
+}
+
+/**
+ * Get the number of databases.
+ */
+JNIEXPORT jint JNICALL
+Java_io_nostr_ndk_cache_nostrdb_NostrDB_nativeGetDbCount(
+    JNIEnv *env,
+    jobject thiz
+) {
+    return NDB_DBS;
+}
+
+/**
+ * Get the number of common kinds.
+ */
+JNIEXPORT jint JNICALL
+Java_io_nostr_ndk_cache_nostrdb_NostrDB_nativeGetCommonKindCount(
+    JNIEnv *env,
+    jobject thiz
+) {
+    return NDB_CKIND_COUNT;
+}

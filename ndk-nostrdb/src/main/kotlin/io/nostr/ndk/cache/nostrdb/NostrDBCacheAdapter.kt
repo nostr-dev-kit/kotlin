@@ -192,6 +192,27 @@ class NostrDBCacheAdapter private constructor(
     }
 
     /**
+     * Get database statistics.
+     *
+     * @return NdbStats containing counts and sizes for all databases and event kinds,
+     *         or null if statistics couldn't be retrieved
+     */
+    fun getStats(): NdbStats? = ndb.getStats()
+
+    /**
+     * Get the path to the database directory.
+     */
+    fun getDatabasePath(): String = ndb.getDatabasePath()
+
+    /**
+     * Get the database file size in bytes.
+     */
+    fun getDatabaseSize(): Long {
+        val dbFile = File(getDatabasePath(), "data.mdb")
+        return if (dbFile.exists()) dbFile.length() else 0L
+    }
+
+    /**
      * Convert a note key to an NDKEvent.
      */
     private fun noteKeyToEvent(txn: NostrDB.Transaction, noteKey: Long): NDKEvent? {
