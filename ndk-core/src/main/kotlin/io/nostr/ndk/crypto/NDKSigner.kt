@@ -61,9 +61,10 @@ interface NDKSigner {
             if (coreDeserializersInitialized) return
             synchronized(this) {
                 if (coreDeserializersInitialized) return
-                // Force class loading - companion object init blocks register deserializers
-                NDKPrivateKeySigner::class
-                NDKRemoteSigner::class
+                // Force class initialization by accessing companion objects
+                // This triggers their init blocks which register deserializers
+                Class.forName(NDKPrivateKeySigner::class.java.name)
+                Class.forName(NDKRemoteSigner::class.java.name)
                 coreDeserializersInitialized = true
             }
         }
