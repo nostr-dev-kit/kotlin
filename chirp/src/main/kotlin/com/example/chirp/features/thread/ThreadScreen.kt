@@ -20,7 +20,8 @@ fun ThreadScreen(
     viewModel: ThreadViewModel = hiltViewModel(),
     onNavigateBack: () -> Unit = {},
     onNavigateToProfile: (String) -> Unit = {},
-    onNavigateToThread: (String) -> Unit = {}
+    onNavigateToThread: (String) -> Unit = {},
+    onNavigateToSearch: (String?) -> Unit = {}
 ) {
     val state by viewModel.state.collectAsState()
 
@@ -75,7 +76,8 @@ fun ThreadScreen(
                                 onReply = { },
                                 onReact = { _, _ -> },
                                 onNoteClick = { },
-                                onProfileClick = onNavigateToProfile
+                                onProfileClick = onNavigateToProfile,
+                                onHashtagClick = { tag -> onNavigateToSearch(tag) }
                             )
                         }
 
@@ -101,7 +103,8 @@ fun ThreadScreen(
                                 onReply = { },
                                 onReact = { _, _ -> },
                                 onNoteClick = { },
-                                onProfileClick = onNavigateToProfile
+                                onProfileClick = onNavigateToProfile,
+                                onHashtagClick = { tag -> onNavigateToSearch(tag) }
                             )
                         }
                     }

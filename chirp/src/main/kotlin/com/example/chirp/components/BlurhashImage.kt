@@ -1,25 +1,23 @@
 package com.example.chirp.components
 
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import com.vanniktech.blurhash.BlurHash
 
 /**
- * Composable for loading images with optional blurhash placeholder support.
+ * Composable for loading images with blurhash placeholder support.
  *
- * Note: Blurhash placeholder generation requires the blurhash-kotlin library.
- * Currently placeholders are disabled until the library is available from Maven Central.
- *
- * @param url URL of the image to load
- * @param blurhash Blurhash string for placeholder (currently unused due to library availability)
- * @param contentDescription Accessibility description
- * @param modifier Compose modifier
- * @param contentScale How to scale the image
- * @param cacheKey Optional cache key for Coil
+ * Shows a decoded blurhash as placeholder while the actual image loads,
+ * providing a smooth visual experience.
  */
 @Composable
 fun BlurhashImage(
@@ -30,19 +28,42 @@ fun BlurhashImage(
     contentScale: ContentScale = ContentScale.Crop,
     cacheKey: String? = null
 ) {
-    AsyncImage(
-        model = ImageRequest.Builder(LocalContext.current)
-            .data(url)
-            .crossfade(true)
-            .apply {
-                cacheKey?.let {
-                    memoryCacheKey(it)
-                    diskCacheKey(it)
-                }
+    val blurhashBitmap = remember(blurhash) {
+        blurhash?.let { hash ->
+            try {
+                BlurHash.decode(hash, 32, 32)
+            } catch (e: Exception) {
+                null
             }
-            .build(),
-        contentDescription = contentDescription,
-        modifier = modifier,
-        contentScale = contentScale
-    )
+        }
+    }
+
+    Box(modifier = modifier) {
+        // Show blurhash placeholder first
+        blurhashBitmap?.let { bitmap ->
+            Image(
+                bitmap = bitmap.asImageBitmap(),
+                contentDescription = null,
+                modifier = Modifier.matchParentSize(),
+                contentScale = contentScale
+            )
+        }
+
+        // Load actual image on top
+        AsyncImage(
+            model = ImageRequest.Builder(LocalContext.current)
+                .data(url)
+                .crossfade(true)
+                .apply {
+                    cacheKey?.let {
+                        memoryCacheKey(it)
+                        diskCacheKey(it)
+                    }
+                }
+                .build(),
+            contentDescription = contentDescription,
+            modifier = Modifier.matchParentSize(),
+            contentScale = contentScale
+        )
+    }
 }

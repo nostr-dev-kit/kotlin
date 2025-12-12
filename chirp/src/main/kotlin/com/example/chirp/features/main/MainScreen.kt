@@ -25,29 +25,40 @@ fun MainScreen(
 
     Scaffold(
         bottomBar = {
-            NavigationBar {
-                NavigationBarItem(
-                    selected = state.selectedContent == ContentType.TextNotes,
-                    onClick = { viewModel.selectContentType(ContentType.TextNotes) },
-                    icon = { Icon(Icons.Default.Home, "Text Notes") },
-                    label = { Text("Notes") }
-                )
-                NavigationBarItem(
-                    selected = state.selectedContent == ContentType.Images,
-                    onClick = { viewModel.selectContentType(ContentType.Images) },
-                    icon = { Icon(Icons.Default.Collections, "Images") },
-                    label = { Text("Images") }
-                )
-                NavigationBarItem(
-                    selected = state.selectedContent == ContentType.Videos,
-                    onClick = { viewModel.selectContentType(ContentType.Videos) },
-                    icon = { Icon(Icons.Default.PlayCircle, "Videos") },
-                    label = { Text("Videos") }
-                )
+            // Hide bottom navigation for Videos tab (full-screen experience like TikTok/Reels)
+            if (state.selectedContent != ContentType.Videos) {
+                NavigationBar {
+                    NavigationBarItem(
+                        selected = state.selectedContent == ContentType.TextNotes,
+                        onClick = { viewModel.selectContentType(ContentType.TextNotes) },
+                        icon = { Icon(Icons.Default.Home, "Text Notes") },
+                        label = { Text("Notes") }
+                    )
+                    NavigationBarItem(
+                        selected = state.selectedContent == ContentType.Images,
+                        onClick = { viewModel.selectContentType(ContentType.Images) },
+                        icon = { Icon(Icons.Default.Collections, "Images") },
+                        label = { Text("Images") }
+                    )
+                    NavigationBarItem(
+                        selected = state.selectedContent == ContentType.Videos,
+                        onClick = { viewModel.selectContentType(ContentType.Videos) },
+                        icon = { Icon(Icons.Default.PlayCircle, "Videos") },
+                        label = { Text("Videos") }
+                    )
+                }
             }
         }
     ) { paddingValues ->
-        Box(modifier = Modifier.padding(paddingValues)) {
+        Box(
+            modifier = if (state.selectedContent == ContentType.Videos) {
+                // Full screen for videos (no padding)
+                Modifier.fillMaxSize()
+            } else {
+                // Normal padding for other tabs
+                Modifier.padding(paddingValues)
+            }
+        ) {
             when (state.selectedContent) {
                 ContentType.TextNotes -> {
                     HomeScreen(
@@ -60,8 +71,8 @@ fun MainScreen(
                         onNavigateToProfile = { pubkey ->
                             navController.navigate("profile/$pubkey")
                         },
-                        onNavigateToSearch = {
-                            navController.navigate("search")
+                        onNavigateToSearch = { hashtag ->
+                            navController.navigate(Routes.Search.createRoute(hashtag))
                         },
                         onNavigateToSettings = {
                             navController.navigate("settings")
