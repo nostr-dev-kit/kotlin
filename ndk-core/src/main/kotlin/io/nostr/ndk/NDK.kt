@@ -7,13 +7,20 @@ import io.nostr.ndk.crypto.NDKSigner
 import io.nostr.ndk.models.NDKFilter
 import io.nostr.ndk.models.PublicKey
 import io.nostr.ndk.outbox.NDKOutboxTracker
+import io.nostr.ndk.outbox.NDKRelaySetCalculator
 import io.nostr.ndk.relay.NDKPool
 import io.nostr.ndk.subscription.NDKSubscription
 import io.nostr.ndk.subscription.NDKSubscriptionManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 
 /**
  * Main entry point for the Nostr Development Kit (NDK).
@@ -107,6 +114,17 @@ class NDK(
      * Manages relay lists (NIP-65) and provides outbox model capabilities.
      */
     val outboxTracker: NDKOutboxTracker by lazy { NDKOutboxTracker(this) }
+
+    /**
+     * Lazy initialized relay set calculator.
+     * Calculates optimal relays for subscriptions based on outbox model.
+     */
+    internal val relaySetCalculator: NDKRelaySetCalculator by lazy { NDKRelaySetCalculator(this) }
+
+    /**
+     * Coroutine scope for NDK operations.
+     */
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     // Account management
     private val _currentUser = MutableStateFlow<NDKCurrentUser?>(null)
@@ -255,16 +273,22 @@ class NDK(
     }
 
     /**
-     * Connects to all explicit relays.
-     * Adds each relay URL to the pool and initiates connections.
+     * Connects to all explicit relays and outbox relays.
+     * Both pools are connected in parallel for faster startup.
      *
      * @param timeoutMs Maximum time to wait for connections (default: 5000ms)
      */
     suspend fun connect(timeoutMs: Long = 5000) {
+        // Add explicit relays to main pool
         explicitRelayUrls.forEach { url ->
             pool.addRelay(url, connect = true)
         }
-        pool.connect(timeoutMs)
+
+        // Connect both pools in parallel
+        coroutineScope {
+            launch { pool.connect(timeoutMs) }
+            launch { outboxPool.connect(timeoutMs) }
+        }
     }
 
     /**
@@ -284,6 +308,9 @@ class NDK(
      * If a cache adapter is configured, cached events are emitted first,
      * followed by events from relays (cache-first strategy).
      *
+     * When outbox model is enabled and filters contain authors, the subscription
+     * will use the authors' write relays instead of all connected relays.
+     *
      * @param filters List of filters to match events against
      * @return A new subscription that will emit matching events
      */
@@ -293,10 +320,45 @@ class NDK(
         // Load cached events first (cache-first strategy)
         subscription.loadFromCache()
 
-        // Then subscribe to relays for new events
-        subscription.start(pool.connectedRelays.value)
+        // Calculate optimal relays based on outbox model (uses runBlocking for cache lookup)
+        val relays = runBlocking {
+            relaySetCalculator.calculateRelaysForFilters(filters)
+        }
+
+        // Start subscription on calculated relays
+        subscription.start(relays)
+
+        // Track subscription for dynamic relay updates if outbox model enabled
+        if (enableOutboxModel) {
+            trackSubscriptionForRelayUpdates(subscription, filters)
+        }
 
         return subscription
+    }
+
+    /**
+     * Tracks a subscription for dynamic relay updates.
+     * When relay lists are discovered for authors in the filter,
+     * the subscription is updated to include those relays.
+     */
+    private fun trackSubscriptionForRelayUpdates(subscription: NDKSubscription, filters: List<NDKFilter>) {
+        val authors = filters.flatMap { it.authors ?: emptySet() }.toSet()
+        if (authors.isEmpty()) return
+
+        val job = scope.launch {
+            outboxTracker.onRelayListDiscovered.collect { (pubkey, relayList) ->
+                if (pubkey in authors) {
+                    val newRelays = relayList.writeRelays.mapNotNull { url ->
+                        if (subscription.hasRelay(url)) null
+                        else pool.getRelay(url) ?: pool.addTemporaryRelay(url)
+                    }
+                    if (newRelays.isNotEmpty()) {
+                        subscription.addRelays(newRelays.toSet())
+                    }
+                }
+            }
+        }
+        subscription.setRelayUpdateJob(job)
     }
 
     /**

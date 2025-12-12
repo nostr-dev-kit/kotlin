@@ -6,6 +6,7 @@ import io.nostr.ndk.models.NDKFilter
 import io.nostr.ndk.relay.NDKRelay
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -80,6 +81,9 @@ class NDKSubscription(
     // Coroutine scope for cache operations
     private val cacheScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    // Job for relay update tracking (cancelled on stop)
+    private var relayUpdateJob: Job? = null
+
     // Set of relays this subscription is active on
     private val _activeRelays = MutableStateFlow<Set<NDKRelay>>(emptySet())
 
@@ -129,10 +133,24 @@ class NDKSubscription(
     }
 
     /**
+     * Sets the job that tracks relay list updates for this subscription.
+     * The job will be cancelled when the subscription is stopped.
+     *
+     * @param job The coroutine job tracking relay updates
+     */
+    internal fun setRelayUpdateJob(job: Job) {
+        relayUpdateJob = job
+    }
+
+    /**
      * Stops the subscription and cancels all relay subscriptions.
      * After calling stop(), no more events will be emitted.
      */
     fun stop() {
+        // Cancel relay update tracking
+        relayUpdateJob?.cancel()
+        relayUpdateJob = null
+
         _activeRelays.value.forEach { relay ->
             relay.unsubscribe(id)
         }

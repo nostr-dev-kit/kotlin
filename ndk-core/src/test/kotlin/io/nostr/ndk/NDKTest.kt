@@ -213,4 +213,35 @@ class NDKTest {
 
         assertTrue(ndk.pool !== ndk.outboxPool)
     }
+
+    @Test
+    fun `subscribe with authors uses relay calculator when outbox enabled`() = runTest {
+        val ndk = NDK()
+        ndk.enableOutboxModel = true
+
+        // Add a relay to pool
+        ndk.pool.addRelay("wss://relay1.com", connect = false)
+
+        // Subscribe with authors filter
+        val filter = NDKFilter(authors = setOf("author1"), kinds = setOf(1))
+        val subscription = ndk.subscribe(filter)
+
+        // Subscription should be created
+        assertNotNull(subscription)
+    }
+
+    @Test
+    fun `subscribe without authors uses all connected relays`() = runTest {
+        val ndk = NDK()
+
+        ndk.pool.addRelay("wss://relay1.com", connect = false)
+        ndk.pool.addRelay("wss://relay2.com", connect = false)
+
+        // Subscribe without authors
+        val filter = NDKFilter(kinds = setOf(1), limit = 10)
+        val subscription = ndk.subscribe(filter)
+
+        // Should use all available relays
+        assertEquals(2, subscription.activeRelays.value.size)
+    }
 }
