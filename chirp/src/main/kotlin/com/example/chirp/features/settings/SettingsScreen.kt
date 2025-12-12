@@ -8,7 +8,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.chirp.ui.theme.Spacing
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -16,8 +17,36 @@ fun SettingsScreen(
     onNavigateBack: () -> Unit = {},
     onNavigateToDeveloperTools: () -> Unit = {},
     onNavigateToContentRendererSettings: () -> Unit = {},
-    onNavigateToRelaySettings: () -> Unit = {}
+    onNavigateToRelaySettings: () -> Unit = {},
+    onNavigateToBlossomSettings: () -> Unit = {},
+    onLogout: () -> Unit = {},
+    viewModel: SettingsViewModel = hiltViewModel()
 ) {
+    var showLogoutDialog by remember { mutableStateOf(false) }
+
+    if (showLogoutDialog) {
+        AlertDialog(
+            onDismissRequest = { showLogoutDialog = false },
+            title = { Text("Logout") },
+            text = { Text("Are you sure you want to logout?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showLogoutDialog = false
+                        viewModel.logout { onLogout() }
+                    }
+                ) {
+                    Text("Logout")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLogoutDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -37,8 +66,8 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(Spacing.lg),
+            verticalArrangement = Arrangement.spacedBy(Spacing.lg)
         ) {
             Text(
                 text = "App Settings",
@@ -56,7 +85,7 @@ fun SettingsScreen(
                     trailingContent = {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                            contentDescription = "Navigate to Content Renderer Settings"
+                            contentDescription = null
                         )
                     }
                 )
@@ -73,7 +102,24 @@ fun SettingsScreen(
                     trailingContent = {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                            contentDescription = "Navigate to Relay Settings"
+                            contentDescription = null
+                        )
+                    }
+                )
+            }
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onNavigateToBlossomSettings)
+            ) {
+                ListItem(
+                    headlineContent = { Text("Blossom Servers") },
+                    supportingContent = { Text("Configure media upload servers") },
+                    trailingContent = {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = null
                         )
                     }
                 )
@@ -83,15 +129,15 @@ fun SettingsScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier.padding(Spacing.lg),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.sm)
                 ) {
                     Text(
                         text = "About",
                         style = MaterialTheme.typography.titleMedium
                     )
                     Text(
-                        text = "Chirp - A Twitter-like Nostr client\nBuilt with ndk-android",
+                        text = "Chirp - A Nostr client\nBuilt with ndk-android",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -102,16 +148,19 @@ fun SettingsScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier.padding(Spacing.lg),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.sm)
                 ) {
                     Text(
                         text = "Account",
                         style = MaterialTheme.typography.titleMedium
                     )
                     Button(
-                        onClick = { /* Logout functionality could be added here */ },
-                        modifier = Modifier.fillMaxWidth()
+                        onClick = { showLogoutDialog = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error
+                        )
                     ) {
                         Text("Logout")
                     }
@@ -125,11 +174,11 @@ fun SettingsScreen(
             ) {
                 ListItem(
                     headlineContent = { Text("Developer Tools") },
-                    supportingContent = { Text("Relay monitor, database stats, subscriptions, outbox metrics") },
+                    supportingContent = { Text("Relay monitor, database stats, subscriptions") },
                     trailingContent = {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                            contentDescription = "Navigate to Developer Tools"
+                            contentDescription = null
                         )
                     }
                 )

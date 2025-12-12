@@ -27,6 +27,7 @@ import com.example.chirp.features.images.ImageDetailScreen
 import com.example.chirp.features.images.ImageFeedViewModel
 import com.example.chirp.features.images.upload.ImageUploadScreen
 import com.example.chirp.features.videos.record.VideoRecordScreen
+import com.example.chirp.features.settings.blossom.BlossomSettingsScreen
 
 @Composable
 fun ChirpNavigation(
@@ -147,6 +148,14 @@ fun ChirpNavigation(
                 },
                 onNavigateToRelaySettings = {
                     navController.navigate(Routes.RelaySettings.route)
+                },
+                onNavigateToBlossomSettings = {
+                    navController.navigate(Routes.BlossomSettings.route)
+                },
+                onLogout = {
+                    navController.navigate(Routes.Onboarding.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
                 }
             )
         }
@@ -262,6 +271,14 @@ fun ChirpNavigation(
 
         composable(Routes.VideoRecord.route) {
             VideoRecordScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(Routes.BlossomSettings.route) {
+            BlossomSettingsScreen(
                 onNavigateBack = {
                     navController.popBackStack()
                 }
