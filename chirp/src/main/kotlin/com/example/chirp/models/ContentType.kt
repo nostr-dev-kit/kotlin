@@ -7,9 +7,9 @@ package com.example.chirp.models
 sealed class ContentType {
     data object TextNotes : ContentType()
     data object Images : ContentType()
+    data object Videos : ContentType()
 
     // Future content types:
-    // data object Videos : ContentType()
     // data object Articles : ContentType()
     // data object Audio : ContentType()
 }

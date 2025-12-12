@@ -1,6 +1,8 @@
 package io.nostr.ndk.relay
 
 import io.nostr.ndk.NDK
+import io.nostr.ndk.relay.nip11.Nip11Cache
+import io.nostr.ndk.relay.nip11.Nip11RelayInformation
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import java.util.concurrent.ConcurrentHashMap
@@ -23,6 +25,14 @@ class NDKPool(private val ndk: NDK) {
     private val relayStateJobs = ConcurrentHashMap<String, Job>()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /**
+     * NIP-11 cache shared across all relays in the pool.
+     */
+    internal val nip11Cache = Nip11Cache(
+        maxSize = 1000,
+        ttlMs = 3600_000L // 1 hour
+    )
 
     private val _availableRelays = MutableStateFlow<Set<NDKRelay>>(emptySet())
     /**
@@ -266,6 +276,51 @@ class NDKPool(private val ndk: NDK) {
     }
 
     /**
+     * Fetch NIP-11 information for all relays in the pool.
+     *
+     * @return Map of relay URL to Result
+     */
+    suspend fun fetchAllNip11Info(): Map<String, Result<Nip11RelayInformation>> {
+        val results = mutableMapOf<String, Result<Nip11RelayInformation>>()
+
+        relays.values.forEach { relay ->
+            val result = relay.fetchNip11Info()
+            results[relay.url] = result
+        }
+
+        return results
+    }
+
+    /**
+     * Get statistics for all relays.
+     *
+     * @return Map of relay URL to statistics snapshot
+     */
+    fun getAllStatistics(): Map<String, NDKRelayStatisticsSnapshot> {
+        return relays.mapValues { (_, relay) -> relay.getStatistics() }
+    }
+
+    /**
+     * Get aggregated statistics across all relays.
+     */
+    fun getAggregatedStatistics(): AggregatedRelayStatistics {
+        val allStats = relays.values.map { it.getStatistics() }
+
+        return AggregatedRelayStatistics(
+            totalRelays = relays.size,
+            connectedRelays = connectedRelays.value.size,
+            totalConnectionAttempts = allStats.sumOf { it.connectionAttempts },
+            totalSuccessfulConnections = allStats.sumOf { it.successfulConnections },
+            totalMessagesSent = allStats.sumOf { it.messagesSent },
+            totalMessagesReceived = allStats.sumOf { it.messagesReceived },
+            totalBytesSent = allStats.sumOf { it.bytesSent },
+            totalBytesReceived = allStats.sumOf { it.bytesReceived },
+            totalValidatedEvents = allStats.sumOf { it.validatedEvents },
+            totalActiveSubscriptions = allStats.sumOf { it.activeSubscriptions }
+        )
+    }
+
+    /**
      * Cleans up resources when the pool is no longer needed.
      * Closes all relays and cancels all pending jobs.
      */
@@ -288,5 +343,49 @@ class NDKPool(private val ndk: NDK) {
 
         // Cancel the pool scope
         scope.cancel()
+    }
+}
+
+/**
+ * Aggregated statistics across all relays in the pool.
+ */
+data class AggregatedRelayStatistics(
+    val totalRelays: Int,
+    val connectedRelays: Int,
+    val totalConnectionAttempts: Long,
+    val totalSuccessfulConnections: Long,
+    val totalMessagesSent: Long,
+    val totalMessagesReceived: Long,
+    val totalBytesSent: Long,
+    val totalBytesReceived: Long,
+    val totalValidatedEvents: Long,
+    val totalActiveSubscriptions: Long
+) {
+    /**
+     * Average connection success rate across all relays (0.0 to 1.0).
+     */
+    val averageConnectionSuccessRate: Float
+        get() = if (totalConnectionAttempts > 0)
+            totalSuccessfulConnections.toFloat() / totalConnectionAttempts else 0f
+
+    override fun toString(): String {
+        return """
+            PoolStatistics:
+              Relays: $connectedRelays/$totalRelays connected
+              Connections: $totalSuccessfulConnections/$totalConnectionAttempts (${(averageConnectionSuccessRate * 100).toInt()}%)
+              Messages: sent=$totalMessagesSent, received=$totalMessagesReceived
+              Traffic: sent=${formatBytes(totalBytesSent)}, received=${formatBytes(totalBytesReceived)}
+              Events: validated=$totalValidatedEvents
+              Subscriptions: active=$totalActiveSubscriptions
+        """.trimIndent()
+    }
+
+    private fun formatBytes(bytes: Long): String {
+        return when {
+            bytes < 1024 -> "${bytes}B"
+            bytes < 1024 * 1024 -> "${"%.1f".format(bytes / 1024.0)}KB"
+            bytes < 1024 * 1024 * 1024 -> "${"%.1f".format(bytes / (1024.0 * 1024))}MB"
+            else -> "${"%.1f".format(bytes / (1024.0 * 1024 * 1024))}GB"
+        }
     }
 }

@@ -23,7 +23,8 @@ object NDKModule {
         explicitRelayUrls = setOf(
             "wss://relay.damus.io",
             "wss://nos.lol",
-            "wss://relay.nostr.band"
+            "wss://relay.nostr.band",
+            "wss://relay.divine.video"
         ),
         cacheAdapter = NostrDBCacheAdapter.create(context),
         accountStorage = AndroidAccountStorage.getInstance(context)

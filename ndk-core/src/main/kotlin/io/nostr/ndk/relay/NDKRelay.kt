@@ -9,6 +9,8 @@ import io.nostr.ndk.models.NDKTag
 import io.nostr.ndk.models.Timestamp
 import io.nostr.ndk.relay.messages.ClientMessage
 import io.nostr.ndk.relay.messages.RelayMessage
+import io.nostr.ndk.relay.nip11.Nip11Cache
+import io.nostr.ndk.relay.nip11.Nip11RelayInformation
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -75,6 +77,36 @@ class NDKRelay(
      */
     var nonValidatedEventCount: Long = 0
 
+    // NEW: Statistics tracking
+    private val statistics = NDKRelayStatistics()
+
+    // NEW: NIP-11 information (lazy-loaded via cache)
+    private var _nip11Info: Nip11RelayInformation? = null
+
+    /**
+     * Get relay statistics snapshot.
+     */
+    fun getStatistics(): NDKRelayStatisticsSnapshot = statistics.snapshot()
+
+    /**
+     * Get NIP-11 relay information.
+     * Returns cached value if available, null otherwise.
+     * Use [fetchNip11Info] to actively fetch.
+     */
+    val nip11Info: Nip11RelayInformation?
+        get() = _nip11Info
+
+    /**
+     * Fetch NIP-11 relay information and cache it.
+     * Uses the pool's cache if relay is part of a pool.
+     */
+    suspend fun fetchNip11Info(): Result<Nip11RelayInformation> {
+        val cache = Nip11Cache()
+        val result = cache.get(url)
+        result.onSuccess { _nip11Info = it }
+        return result
+    }
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     // Reconnection state
@@ -126,11 +158,17 @@ class NDKRelay(
             lastConnectAttemptTime = System.currentTimeMillis()
             NDKLogging.d(TAG, "[$url] Connecting... (attempt $_connectionAttempts, reconnect attempt $reconnectAttempt)")
 
+            // Track connection attempt
+            statistics.recordConnectionAttempt()
+
             val ws = NDKWebSocket(url, okHttpClient)
             ws.connect()
             webSocket = ws
             _state.value = NDKRelayState.CONNECTED
             _lastConnectedAt = System.currentTimeMillis() / 1000
+
+            // Track successful connection
+            statistics.recordSuccessfulConnection(_lastConnectedAt!! * 1000)
 
             // Reset backoff on successful connection
             reconnectAttempt = 0
@@ -182,6 +220,9 @@ class NDKRelay(
             activeSubscriptions.clear()
             reconnectAttempt = 0
         }
+
+        // Track disconnection
+        statistics.recordDisconnection()
 
         webSocket?.disconnect()
         webSocket = null
@@ -286,6 +327,9 @@ class NDKRelay(
         // Track for restoration after reconnect
         activeSubscriptions[subId] = filters
 
+        // Track subscription
+        statistics.recordSubscriptionAdded()
+
         if (webSocket == null) {
             NDKLogging.w(TAG, "[$url] Cannot subscribe yet - no WebSocket connection, will send on connect")
             return
@@ -324,6 +368,9 @@ class NDKRelay(
         // Remove from tracking
         activeSubscriptions.remove(subId)
 
+        // Track subscription removal
+        statistics.recordSubscriptionRemoved()
+
         val ws = webSocket ?: return
         val closeMessage = ClientMessage.Close(subId)
 
@@ -345,8 +392,13 @@ class NDKRelay(
     internal suspend fun publish(event: NDKEvent): Result<Unit> {
         val ws = webSocket ?: return Result.failure(IllegalStateException("Not connected"))
         val eventMessage = ClientMessage.Event(event)
+        val json = eventMessage.toJson()
+
+        // Track sent message bytes
+        statistics.recordMessageSent(json.length)
+
         return try {
-            ws.send(eventMessage.toJson())
+            ws.send(json)
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -367,6 +419,9 @@ class NDKRelay(
 
         _state.value = NDKRelayState.AUTHENTICATING
         NDKLogging.d(TAG, "[$url] Authenticating with challenge: ${challenge.take(16)}...")
+
+        // Track auth attempt
+        statistics.recordAuthAttempt()
 
         try {
             // Create NIP-42 AUTH event (kind 22242)
@@ -401,6 +456,9 @@ class NDKRelay(
             // For now, consider ourselves authenticated after sending
             _state.value = NDKRelayState.AUTHENTICATED
 
+            // Track auth success
+            statistics.recordAuthSuccess()
+
         } catch (e: Exception) {
             NDKLogging.e(TAG, "[$url] Authentication failed: ${e.message}")
             _state.value = NDKRelayState.AUTH_REQUIRED
@@ -411,11 +469,18 @@ class NDKRelay(
      * Handles incoming messages from the relay.
      */
     private fun handleMessage(json: String) {
+        // Track received message bytes
+        statistics.recordMessageReceived(json.length)
+
         try {
             val message = RelayMessage.parse(json)
             when (message) {
                 is RelayMessage.Event -> {
                     validatedEventCount++
+
+                    // Track validated event
+                    statistics.recordValidatedEvent()
+
                     NDKLogging.d(TAG, "[$url] EVENT received: kind=${message.event.kind}, id=${message.event.id.take(8)}...")
                     ndk?.subscriptionManager?.dispatchEvent(message.event, this, message.subscriptionId)
                 }
@@ -452,6 +517,9 @@ class NDKRelay(
         } catch (e: Exception) {
             NDKLogging.e(TAG, "[$url] Failed to parse message: ${e.message}, json=${json.take(100)}...")
             nonValidatedEventCount++
+
+            // Track non-validated event
+            statistics.recordNonValidatedEvent()
         }
     }
 

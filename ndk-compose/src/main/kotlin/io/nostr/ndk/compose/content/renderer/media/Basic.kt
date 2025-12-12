@@ -42,8 +42,7 @@ import io.nostr.ndk.content.MediaType
 fun BasicMediaRenderer(
     segment: ContentSegment.Media,
     onClick: ((urls: List<String>, index: Int) -> Unit)?,
-    modifier: Modifier = Modifier,
-    autoLoad: Boolean = true
+    modifier: Modifier = Modifier
 ) {
     when {
         segment.urls.isEmpty() -> {

@@ -207,8 +207,7 @@ private fun RenderSegment(
         is ContentSegment.Media -> {
             BasicMediaRenderer(
                 segment = segment,
-                onClick = callbacks.onMediaClick,
-                autoLoad = settings.autoLoadImages
+                onClick = callbacks.onMediaClick
             )
         }
     }

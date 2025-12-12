@@ -3,8 +3,8 @@ package com.example.chirp.features.home.components
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.Reply
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -82,7 +82,7 @@ fun NoteCard(
             ) {
                 IconButton(onClick = { onReply(note.id) }) {
                     Icon(
-                        imageVector = Icons.Default.Reply,
+                        imageVector = Icons.AutoMirrored.Filled.Reply,
                         contentDescription = "Reply"
                     )
                 }

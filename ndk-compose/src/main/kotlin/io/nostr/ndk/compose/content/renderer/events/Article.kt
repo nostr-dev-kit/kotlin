@@ -120,7 +120,6 @@ private fun ArticleCardContent(event: NDKEvent, ndk: NDK) {
     val title = event.tags.find { it.name == "title" }?.values?.firstOrNull() ?: "Untitled Article"
     val summary = event.tags.find { it.name == "summary" }?.values?.firstOrNull()
     val imageUrl = event.tags.find { it.name == "image" }?.values?.firstOrNull()
-    val publishedAt = event.tags.find { it.name == "published_at" }?.values?.firstOrNull()?.toLongOrNull()
 
     Row(modifier = Modifier.fillMaxWidth()) {
         // Article info

@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Collections
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -11,6 +12,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import com.example.chirp.features.home.HomeScreen
 import com.example.chirp.features.images.ImageFeedScreen
+import com.example.chirp.features.videos.VideoFeedScreen
 import com.example.chirp.models.ContentType
 import com.example.chirp.navigation.Routes
 
@@ -35,6 +37,12 @@ fun MainScreen(
                     onClick = { viewModel.selectContentType(ContentType.Images) },
                     icon = { Icon(Icons.Default.Collections, "Images") },
                     label = { Text("Images") }
+                )
+                NavigationBarItem(
+                    selected = state.selectedContent == ContentType.Videos,
+                    onClick = { viewModel.selectContentType(ContentType.Videos) },
+                    icon = { Icon(Icons.Default.PlayCircle, "Videos") },
+                    label = { Text("Videos") }
                 )
             }
         }
@@ -69,6 +77,9 @@ fun MainScreen(
                             navController.navigate(Routes.ImageUpload.route)
                         }
                     )
+                }
+                ContentType.Videos -> {
+                    VideoFeedScreen()
                 }
             }
         }

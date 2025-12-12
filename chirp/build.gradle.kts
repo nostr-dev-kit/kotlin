@@ -86,6 +86,11 @@ dependencies {
     // Telephoto for zoomable images
     implementation("me.saket.telephoto:zoomable-image-coil:0.7.1")
 
+    // Media3 (ExoPlayer) for video playback
+    implementation("androidx.media3:media3-exoplayer:1.2.1")
+    implementation("androidx.media3:media3-ui:1.2.1")
+    implementation("androidx.media3:media3-common:1.2.1")
+
     // Ktor for Blossom uploads (shared with ndk-core)
     implementation("io.ktor:ktor-client-core:2.3.7")
     implementation("io.ktor:ktor-client-okhttp:2.3.7")

@@ -13,7 +13,8 @@ data class ImetaTag(
     val sha256: String? = null,
     val size: Long? = null,
     val alt: String? = null,
-    val fallback: List<String> = emptyList()
+    val fallback: List<String> = emptyList(),
+    val duration: Int? = null
 ) {
     companion object {
         /**
@@ -56,7 +57,8 @@ data class ImetaTag(
                 sha256 = metadata["x"],
                 size = metadata["size"]?.toLongOrNull(),
                 alt = metadata["alt"],
-                fallback = fallbacks
+                fallback = fallbacks,
+                duration = metadata["duration"]?.toIntOrNull()
             )
         }
 

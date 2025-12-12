@@ -40,7 +40,5 @@ data class ContentRendererSettings(
     val linkStyle: RendererStyle = RendererStyle.DEFAULT,
     val mediaStyle: RendererStyle = RendererStyle.DEFAULT,
     val showAvatarsInMentions: Boolean = true,
-    val autoLoadImages: Boolean = true,
-    val maxImagesInGallery: Int = 4,
     val enableLinkPreviews: Boolean = true
 )
