@@ -4,9 +4,6 @@ import io.nostr.ndk.NDK
 import io.nostr.ndk.models.NDKFilter
 import io.nostr.ndk.models.PublicKey
 import io.nostr.ndk.relay.NDKRelay
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
 /**
@@ -17,10 +14,11 @@ import kotlinx.coroutines.launch
  * 2. Select an optimal subset that covers all authors
  * 3. Prefer already-connected relays to minimize new connections
  * 4. Add temporary relays as needed for coverage
+ *
+ * This calculator uses NDK's coroutine scope, so all async operations are
+ * properly cancelled when NDK.close() is called.
  */
 class NDKRelaySetCalculator(private val ndk: NDK) {
-
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     /**
      * Calculates the optimal relays to subscribe to for the given filters.
@@ -58,7 +56,7 @@ class NDKRelaySetCalculator(private val ndk: NDK) {
 
         // Phase 2: Trigger async fetch for uncovered authors (don't block)
         if (uncoveredAuthors.isNotEmpty()) {
-            scope.launch {
+            ndk.scope.launch {
                 uncoveredAuthors.forEach { pubkey ->
                     ndk.outboxTracker.fetchRelayList(pubkey)
                 }

@@ -1,10 +1,16 @@
 package io.nostr.ndk
 
+import io.nostr.ndk.cache.InMemoryCacheAdapter
 import io.nostr.ndk.crypto.NDKKeyPair
 import io.nostr.ndk.crypto.NDKPrivateKeySigner
+import io.nostr.ndk.models.NDKEvent
 import io.nostr.ndk.models.NDKFilter
+import io.nostr.ndk.models.NDKTag
 import io.nostr.ndk.relay.NDKRelay
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
 import org.junit.Test
 import org.junit.Assert.*
 
@@ -243,5 +249,116 @@ class NDKTest {
 
         // Should use all available relays
         assertEquals(2, subscription.activeRelays.value.size)
+    }
+
+    // ===========================================
+    // Integration Tests: Dynamic Relay Updates
+    // ===========================================
+
+    @Test
+    fun `subscription dynamically adds relays when relay list discovered`() = runBlocking {
+        val cache = InMemoryCacheAdapter()
+        val ndk = NDK(cacheAdapter = cache)
+        ndk.enableOutboxModel = true
+
+        // Add initial relay to pool
+        ndk.pool.addRelay("wss://initial-relay.com", connect = false)
+
+        // Subscribe with authors filter - initially no relay list cached
+        val filter = NDKFilter(authors = setOf("alice"), kinds = setOf(1))
+        val subscription = ndk.subscribe(filter)
+
+        // Initially uses available relays since no relay list cached
+        assertEquals(1, subscription.activeRelays.value.size)
+        assertTrue(subscription.hasRelay("wss://initial-relay.com"))
+
+        // Simulate discovering alice's relay list
+        val relayListEvent = createRelayListEvent(
+            pubkey = "alice",
+            tags = listOf(
+                listOf("r", "wss://alice-write1.com", "write"),
+                listOf("r", "wss://alice-write2.com", "write")
+            )
+        )
+
+        // Track the relay list (triggers onRelayListDiscovered)
+        ndk.outboxTracker.trackRelayList(relayListEvent)
+
+        // Wait for async relay update to propagate
+        withTimeout(2000) {
+            while (subscription.activeRelays.value.size <= 1) {
+                delay(10)
+            }
+        }
+
+        // Subscription should now have alice's write relays added
+        assertTrue(subscription.activeRelays.value.size > 1)
+        assertTrue(subscription.hasRelay("wss://alice-write1.com") || subscription.hasRelay("wss://alice-write2.com"))
+
+        subscription.stop()
+        ndk.close()
+    }
+
+    @Test
+    fun `subscription stops tracking relays when stopped`() = runTest {
+        val cache = InMemoryCacheAdapter()
+        val ndk = NDK(cacheAdapter = cache)
+        ndk.enableOutboxModel = true
+
+        ndk.pool.addRelay("wss://relay.com", connect = false)
+
+        val filter = NDKFilter(authors = setOf("bob"), kinds = setOf(1))
+        val subscription = ndk.subscribe(filter)
+
+        // Stop the subscription
+        subscription.stop()
+
+        // Now discover bob's relay list
+        val relayListEvent = createRelayListEvent(
+            pubkey = "bob",
+            tags = listOf(listOf("r", "wss://bob-relay.com", "write"))
+        )
+        ndk.outboxTracker.trackRelayList(relayListEvent)
+
+        delay(100)
+
+        // Subscription should NOT have added new relays since it's stopped
+        assertTrue(subscription.activeRelays.value.isEmpty())
+
+        ndk.close()
+    }
+
+    @Test
+    fun `close cancels all async operations`() = runTest {
+        val ndk = NDK()
+        ndk.enableOutboxModel = true
+
+        ndk.pool.addRelay("wss://relay.com", connect = false)
+
+        val filter = NDKFilter(authors = setOf("user"), kinds = setOf(1))
+        val subscription = ndk.subscribe(filter)
+
+        // Close NDK
+        ndk.close()
+
+        // Should not throw, just cleanly stop
+        // The scope.cancel() in close() should cancel any pending operations
+    }
+
+    // Helper
+    private fun createRelayListEvent(
+        pubkey: String,
+        tags: List<List<String>>,
+        createdAt: Long = System.currentTimeMillis() / 1000
+    ): NDKEvent {
+        return NDKEvent(
+            id = "event-$pubkey",
+            pubkey = pubkey,
+            createdAt = createdAt,
+            kind = 10002,
+            tags = tags.map { NDKTag(it.first(), it.drop(1)) },
+            content = "",
+            sig = "sig"
+        )
     }
 }

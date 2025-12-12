@@ -137,6 +137,13 @@ internal class NDKSubscriptionManager(
             }
         }
 
+        // Auto-track relay lists for outbox model (NIP-65)
+        if (event.kind == 10002 && ndk.enableOutboxModel) {
+            cacheScope.launch {
+                ndk.outboxTracker.trackRelayList(event)
+            }
+        }
+
         // Emit to global event stream
         _allEvents.tryEmit(event to relay)
 

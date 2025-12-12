@@ -14,6 +14,7 @@ import io.nostr.ndk.subscription.NDKSubscriptionManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,7 +29,7 @@ import kotlinx.coroutines.runBlocking
  * NDK manages relay connections, subscriptions, event publishing, and account management.
  * It provides a streaming-first API where events are delivered via Kotlin Flows.
  *
- * Example usage:
+ * ## Basic Usage
  * ```kotlin
  * val ndk = NDK(
  *     explicitRelayUrls = setOf("wss://relay.damus.io", "wss://nos.lol"),
@@ -48,9 +49,32 @@ import kotlinx.coroutines.runBlocking
  * }
  * ```
  *
+ * ## Outbox Model (NIP-65)
+ *
+ * NDK implements the outbox model for efficient relay selection. When enabled:
+ * - Subscriptions with author filters query each author's write relays
+ * - Relay lists (kind 10002) are auto-tracked and cached
+ * - Subscriptions dynamically add relays as relay lists are discovered
+ *
+ * ```kotlin
+ * // Configure outbox model (enabled by default)
+ * ndk.enableOutboxModel = true         // Enable/disable outbox relay selection
+ * ndk.relayGoalPerAuthor = 2           // Target relays per author (default: 2)
+ * ndk.autoConnectUserRelays = true     // Auto-connect to user's relays on login
+ *
+ * // Default outbox relays for relay list discovery
+ * ndk.outboxRelayUrls.add("wss://purplepag.es")
+ *
+ * // Subscribe with outbox model - automatically queries author's write relays
+ * val filter = NDKFilter(authors = setOf("alice", "bob"), kinds = setOf(1))
+ * val sub = ndk.subscribe(filter)
+ *
+ * // As relay lists are discovered, subscriptions update automatically
+ * ```
+ *
  * @param explicitRelayUrls Set of relay URLs to connect to
  * @param signer Optional signer for signing and publishing events (deprecated, use login())
- * @param cacheAdapter Optional cache adapter for event persistence
+ * @param cacheAdapter Optional cache adapter for event persistence (required for outbox model caching)
  * @param accountStorage Optional storage for persisting account data
  */
 class NDK(
@@ -92,16 +116,21 @@ class NDK(
     val pool: NDKPool by lazy { NDKPool(this) }
 
     /**
-     * Lazy initialized outbox relay pool.
-     * This pool is dedicated to fetching relay lists (NIP-65) for the outbox model.
+     * Lazy delegate for outbox pool, stored for lifecycle management.
      */
-    val outboxPool: NDKPool by lazy {
+    private val _outboxPool = lazy {
         val pool = NDKPool(this)
         outboxRelayUrls.forEach { url ->
             pool.addRelay(url, connect = false)
         }
         pool
     }
+
+    /**
+     * Lazy initialized outbox relay pool.
+     * This pool is dedicated to fetching relay lists (NIP-65) for the outbox model.
+     */
+    val outboxPool: NDKPool by _outboxPool
 
     /**
      * Lazy initialized subscription manager.
@@ -123,8 +152,9 @@ class NDK(
 
     /**
      * Coroutine scope for NDK operations.
+     * Internal to allow components like relaySetCalculator to use it.
      */
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    internal val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     // Account management
     private val _currentUser = MutableStateFlow<NDKCurrentUser?>(null)
@@ -387,15 +417,24 @@ class NDK(
      * Closes the NDK instance and releases all resources.
      *
      * This method:
-     * - Disconnects from all relays
+     * - Disconnects from all relays (both main pool and outbox pool)
      * - Cancels all reconnection attempts
      * - Clears all subscriptions
-     * - Releases all coroutine scopes
+     * - Cancels all pending async operations (relay list fetches, etc.)
      *
      * After calling close(), this NDK instance should not be used.
      * Create a new instance if needed.
      */
     fun close() {
+        // Cancel all async operations
+        scope.cancel()
+
+        // Close main pool
         pool.close()
+
+        // Close outbox pool if it was initialized
+        if (_outboxPool.isInitialized()) {
+            outboxPool.close()
+        }
     }
 }

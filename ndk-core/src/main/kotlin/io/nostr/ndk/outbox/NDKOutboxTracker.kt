@@ -2,10 +2,13 @@ package io.nostr.ndk.outbox
 
 import io.nostr.ndk.NDK
 import io.nostr.ndk.models.NDKEvent
+import io.nostr.ndk.models.NDKFilter
 import io.nostr.ndk.models.PublicKey
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Tracks relay lists (NIP-65) for users and provides outbox model capabilities.
@@ -145,13 +148,65 @@ class NDKOutboxTracker(private val ndk: NDK) {
     }
 
     /**
-     * Fetches the relay list for a pubkey, checking cache first then querying relays.
+     * Fetches the relay list for a pubkey, checking cache first then querying outbox relays.
+     *
+     * The fetch strategy is:
+     * 1. Check cache first
+     * 2. Query outbox pool (purplepag.es, relay.nos.social) for kind 10002
+     * 3. Fall back to main pool if outbox pool has no connected relays
      *
      * @param pubkey The public key to look up
+     * @param timeoutMs Maximum time to wait for relay response (default: 5000ms)
      * @return The relay list if found, null otherwise
      */
-    suspend fun fetchRelayList(pubkey: PublicKey): RelayList? {
-        // For now, just check cache (full implementation will query outbox relays)
-        return getRelayList(pubkey)
+    suspend fun fetchRelayList(pubkey: PublicKey, timeoutMs: Long = 5000): RelayList? {
+        // 1. Check cache first
+        getRelayList(pubkey)?.let { return it }
+
+        // 2. Determine which pool to use
+        val pool = if (ndk.outboxPool.connectedRelays.value.isNotEmpty()) {
+            ndk.outboxPool
+        } else if (ndk.pool.connectedRelays.value.isNotEmpty()) {
+            ndk.pool
+        } else {
+            return null // No connected relays
+        }
+
+        // 3. Create filter for kind 10002 from this author
+        val filter = NDKFilter(
+            kinds = setOf(10002),
+            authors = setOf(pubkey),
+            limit = 1
+        )
+
+        // 4. Subscribe to connected relays
+        val relays = pool.connectedRelays.value
+        if (relays.isEmpty()) return null
+
+        val subscriptionId = "fetch-relaylist-${pubkey.take(8)}"
+
+        try {
+            // Start subscription on relays
+            relays.forEach { relay ->
+                relay.subscribe(subscriptionId, listOf(filter))
+            }
+
+            // Wait for event with timeout
+            val event = withTimeoutOrNull(timeoutMs) {
+                ndk.subscriptionManager.allEvents.firstOrNull { (event, _) ->
+                    event.kind == 10002 && event.pubkey == pubkey
+                }?.first
+            }
+
+            // Track if found (will emit to onRelayListDiscovered)
+            event?.let { trackRelayList(it) }
+
+            return event?.let { RelayList.fromEvent(it) }
+        } finally {
+            // Clean up subscription
+            relays.forEach { relay ->
+                relay.unsubscribe(subscriptionId)
+            }
+        }
     }
 }
