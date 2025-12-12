@@ -349,6 +349,14 @@ ndk.outboxEvents.collect { event ->
 }
 ```
 
+### Deep Debugging & Internals
+
+For comprehensive visibility into NDK internals, relay connections, NostrDB statistics, and trust-based validation, see:
+
+**[Developer Tools Documentation](docs/developer-tools.md)**
+
+The Chirp sample app includes a full implementation at **Settings → Developer Tools**.
+
 ## Architecture
 
 ```
