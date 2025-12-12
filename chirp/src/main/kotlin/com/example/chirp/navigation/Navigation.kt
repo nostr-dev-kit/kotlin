@@ -1,6 +1,8 @@
 package com.example.chirp.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
@@ -16,6 +18,7 @@ import com.example.chirp.features.profile.ProfileScreen
 import com.example.chirp.features.search.SearchScreen
 import com.example.chirp.features.settings.SettingsScreen
 import com.example.chirp.features.debug.DebugScreen
+import com.example.chirp.features.settings.ContentRenderSettingsScreen
 import com.example.chirp.features.images.ImageDetailScreen
 import com.example.chirp.features.images.ImageFeedViewModel
 import com.example.chirp.features.images.upload.ImageUploadScreen
@@ -119,12 +122,30 @@ fun ChirpNavigation(
                 },
                 onNavigateToDebug = {
                     navController.navigate(Routes.Debug.route)
+                },
+                onNavigateToContentRendererSettings = {
+                    navController.navigate(Routes.ContentRendererSettings.route)
                 }
             )
         }
 
         composable(Routes.Debug.route) {
             DebugScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(Routes.ContentRendererSettings.route) {
+            val viewModel: com.example.chirp.features.settings.ContentRenderSettingsViewModel = hiltViewModel()
+            val settings by viewModel.settings.collectAsState()
+
+            ContentRenderSettingsScreen(
+                settings = settings,
+                onSettingsChanged = { newSettings ->
+                    viewModel.updateSettings(newSettings)
+                },
                 onNavigateBack = {
                     navController.popBackStack()
                 }

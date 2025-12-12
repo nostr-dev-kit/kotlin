@@ -46,6 +46,7 @@ dependencies {
     implementation(project(":ndk-core"))
     implementation(project(":ndk-nostrdb"))
     implementation(project(":ndk-account-android"))
+    implementation(project(":ndk-compose"))
 
     // Kotlin
     implementation("org.jetbrains.kotlin:kotlin-stdlib:2.1.0")

@@ -11,7 +11,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.example.chirp.components.UserDisplayName
+import io.nostr.ndk.compose.user.UserDisplayName
+import io.nostr.ndk.compose.content.ContentCallbacks
+import io.nostr.ndk.compose.content.RenderedContent
 import io.nostr.ndk.NDK
 import io.nostr.ndk.models.NDKEvent
 import java.text.SimpleDateFormat
@@ -58,12 +60,17 @@ fun NoteCard(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Content
-            Text(
-                text = note.content,
-                style = MaterialTheme.typography.bodyMedium,
-                maxLines = 10,
-                overflow = TextOverflow.Ellipsis
+            // Content with rich rendering
+            RenderedContent(
+                ndk = ndk,
+                event = note,
+                callbacks = ContentCallbacks(
+                    onUserClick = onProfileClick,
+                    onHashtagClick = { tag -> /* TODO: Navigate to hashtag feed */ },
+                    onLinkClick = { url -> /* TODO: Open browser */ },
+                    onMediaClick = { urls, index -> /* TODO: Open gallery */ }
+                ),
+                textStyle = MaterialTheme.typography.bodyMedium
             )
 
             Spacer(modifier = Modifier.height(12.dp))

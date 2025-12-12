@@ -1,8 +1,10 @@
 package com.example.chirp.features.settings
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -12,7 +14,8 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun SettingsScreen(
     onNavigateBack: () -> Unit = {},
-    onNavigateToDebug: () -> Unit = {}
+    onNavigateToDebug: () -> Unit = {},
+    onNavigateToContentRendererSettings: () -> Unit = {}
 ) {
     Scaffold(
         topBar = {
@@ -40,6 +43,23 @@ fun SettingsScreen(
                 text = "App Settings",
                 style = MaterialTheme.typography.titleLarge
             )
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onNavigateToContentRendererSettings)
+            ) {
+                ListItem(
+                    headlineContent = { Text("Content Renderer") },
+                    supportingContent = { Text("Customize how content is displayed") },
+                    trailingContent = {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = "Navigate to Content Renderer Settings"
+                        )
+                    }
+                )
+            }
 
             Card(
                 modifier = Modifier.fillMaxWidth()
