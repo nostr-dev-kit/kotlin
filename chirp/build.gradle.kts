@@ -83,8 +83,7 @@ dependencies {
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.0.0")
 
     // Blurhash for placeholders
-    // NOTE: blurhash library needs to be sourced from JitPack or GitHub Packages
-    // implementation("com.github.woltapp:blurhash-kotlin:1.0.0")
+    implementation("com.vanniktech:blurhash:0.3.0")
 
     // Telephoto for zoomable images
     implementation("me.saket.telephoto:zoomable-image-coil:0.7.1")
@@ -102,6 +101,9 @@ dependencies {
 
     // Crypto - secp256k1 JNI native library for Android
     implementation("fr.acinq.secp256k1:secp256k1-kmp-jni-android:0.21.0")
+
+    // QR Code generation
+    implementation("io.github.alexzhirkevich:qrose:1.0.1")
 
     // Testing
     testImplementation("junit:junit:4.13.2")
