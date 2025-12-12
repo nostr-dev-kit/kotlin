@@ -20,12 +20,7 @@ object NDKModule {
     fun provideNDK(
         @ApplicationContext context: Context
     ): NDK = NDK(
-        explicitRelayUrls = setOf(
-            "wss://relay.damus.io",
-            "wss://nos.lol",
-            "wss://relay.nostr.band",
-            "wss://relay.divine.video"
-        ),
+        explicitRelayUrls = emptySet(),
         cacheAdapter = NostrDBCacheAdapter.create(context),
         accountStorage = AndroidAccountStorage.getInstance(context)
     )

@@ -79,7 +79,11 @@ fun MainScreen(
                     )
                 }
                 ContentType.Videos -> {
-                    VideoFeedScreen()
+                    VideoFeedScreen(
+                        onNavigateToProfile = { pubkey ->
+                            navController.navigate(Routes.Profile.createRoute(pubkey))
+                        }
+                    )
                 }
             }
         }

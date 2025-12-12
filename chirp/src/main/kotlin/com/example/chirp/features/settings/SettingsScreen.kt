@@ -15,7 +15,8 @@ import androidx.compose.ui.unit.dp
 fun SettingsScreen(
     onNavigateBack: () -> Unit = {},
     onNavigateToDebug: () -> Unit = {},
-    onNavigateToContentRendererSettings: () -> Unit = {}
+    onNavigateToContentRendererSettings: () -> Unit = {},
+    onNavigateToRelaySettings: () -> Unit = {}
 ) {
     Scaffold(
         topBar = {
@@ -62,22 +63,20 @@ fun SettingsScreen(
             }
 
             Card(
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onNavigateToRelaySettings)
             ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        text = "Relays",
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                    Text(
-                        text = "• wss://relay.damus.io\n• wss://nos.lol\n• wss://relay.nostr.band",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+                ListItem(
+                    headlineContent = { Text("Relays") },
+                    supportingContent = { Text("Manage relay connections") },
+                    trailingContent = {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = "Navigate to Relay Settings"
+                        )
+                    }
+                )
             }
 
             Card(

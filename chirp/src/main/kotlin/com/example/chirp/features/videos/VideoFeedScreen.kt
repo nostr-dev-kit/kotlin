@@ -1,20 +1,31 @@
 package com.example.chirp.features.videos
 
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ChatBubbleOutline
+import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -24,40 +35,23 @@ import io.nostr.ndk.kinds.NDKVideo
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun VideoFeedScreen(
-    viewModel: VideoFeedViewModel = hiltViewModel()
+    viewModel: VideoFeedViewModel = hiltViewModel(),
+    onNavigateToProfile: (String) -> Unit = {}
 ) {
     val state by viewModel.state.collectAsState()
 
     if (state.isLoading && state.videos.isEmpty()) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            CircularProgressIndicator()
-        }
+        LoadingState()
         return
     }
 
     if (state.error != null && state.videos.isEmpty()) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = state.error!!,
-                color = MaterialTheme.colorScheme.error
-            )
-        }
+        ErrorState(error = state.error!!)
         return
     }
 
     if (state.videos.isEmpty()) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            Text("No videos available")
-        }
+        EmptyState()
         return
     }
 
@@ -73,11 +67,16 @@ fun VideoFeedScreen(
             state = pagerState,
             modifier = Modifier.fillMaxSize()
         ) { page ->
+            val isCurrentPage = page == pagerState.currentPage
+            val shouldPreload = kotlin.math.abs(page - pagerState.currentPage) <= 1
+
             VideoPlayerPage(
                 video = state.videos[page],
-                isActive = page == pagerState.currentPage,
+                isActive = isCurrentPage,
+                shouldPreload = shouldPreload,
                 isMuted = state.isMuted,
-                onMuteToggle = { viewModel.toggleMute() }
+                onMuteToggle = { viewModel.toggleMute() },
+                onNavigateToProfile = onNavigateToProfile
             )
         }
     }
@@ -87,13 +86,29 @@ fun VideoFeedScreen(
 private fun VideoPlayerPage(
     video: NDKVideo,
     isActive: Boolean,
+    shouldPreload: Boolean,
     isMuted: Boolean,
-    onMuteToggle: () -> Unit
+    onMuteToggle: () -> Unit,
+    onNavigateToProfile: (String) -> Unit
 ) {
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
+            .pointerInput(Unit) {
+                var offsetX = 0f
+                detectHorizontalDragGestures(
+                    onDragEnd = {
+                        if (offsetX > 200f) {
+                            onNavigateToProfile(video.pubkey)
+                        }
+                        offsetX = 0f
+                    },
+                    onHorizontalDrag = { _, dragAmount ->
+                        offsetX += dragAmount
+                    }
+                )
+            }
     ) {
         // Video player (full screen)
         VideoPlayer(
@@ -109,10 +124,12 @@ private fun VideoPlayerPage(
         // Video info overlay (bottom-left)
         VideoInfoOverlay(
             video = video,
+            onAuthorClick = { onNavigateToProfile(video.pubkey) },
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .fillMaxWidth()
                 .padding(16.dp)
+                .padding(end = 72.dp)  // Make room for interaction buttons
         )
 
         // Mute button (top-right)
@@ -146,12 +163,23 @@ private fun VideoPlayerPage(
                 )
             }
         }
+
+        // Interaction buttons (right side)
+        InteractionButtons(
+            onLikeClick = { /* TODO: Implement like */ },
+            onCommentClick = { /* TODO: Implement comment */ },
+            onShareClick = { /* TODO: Implement share */ },
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .padding(end = 16.dp, bottom = 80.dp)
+        )
     }
 }
 
 @Composable
 private fun VideoInfoOverlay(
     video: NDKVideo,
+    onAuthorClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -162,7 +190,8 @@ private fun VideoInfoOverlay(
         Text(
             text = "@${video.pubkey.take(16)}...",
             color = Color.White,
-            style = MaterialTheme.typography.labelLarge
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier.clickable(onClick = onAuthorClick)
         )
 
         // Title
@@ -210,5 +239,181 @@ private fun formatTimestamp(unixTimestamp: Long): String {
         diff < 86400 -> "${diff / 3600}h ago"
         diff < 604800 -> "${diff / 86400}d ago"
         else -> "${diff / 604800}w ago"
+    }
+}
+
+@Composable
+private fun LoadingState() {
+    val infiniteTransition = rememberInfiniteTransition(label = "loading")
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "alpha"
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            CircularProgressIndicator(
+                modifier = Modifier
+                    .size(48.dp)
+                    .alpha(alpha),
+                color = Color.White
+            )
+            Text(
+                text = "Loading videos...",
+                color = Color.White.copy(alpha = 0.7f),
+                style = MaterialTheme.typography.bodyLarge
+            )
+        }
+    }
+}
+
+@Composable
+private fun EmptyState() {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.padding(32.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.VideoLibrary,
+                contentDescription = null,
+                modifier = Modifier.size(64.dp),
+                tint = Color.White.copy(alpha = 0.5f)
+            )
+            Text(
+                text = "No videos yet",
+                color = Color.White,
+                style = MaterialTheme.typography.headlineSmall,
+                textAlign = TextAlign.Center
+            )
+            Text(
+                text = "Check back later for short videos from the Nostr network",
+                color = Color.White.copy(alpha = 0.7f),
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+}
+
+@Composable
+private fun ErrorState(error: String) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.padding(32.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.ErrorOutline,
+                contentDescription = null,
+                modifier = Modifier.size(64.dp),
+                tint = MaterialTheme.colorScheme.error
+            )
+            Text(
+                text = "Oops!",
+                color = Color.White,
+                style = MaterialTheme.typography.headlineSmall,
+                textAlign = TextAlign.Center
+            )
+            Text(
+                text = error,
+                color = MaterialTheme.colorScheme.error.copy(alpha = 0.9f),
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+}
+
+@Composable
+private fun InteractionButtons(
+    onLikeClick: () -> Unit,
+    onCommentClick: () -> Unit,
+    onShareClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(24.dp)
+    ) {
+        // Like button
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            IconButton(
+                onClick = onLikeClick,
+                modifier = Modifier.size(48.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.FavoriteBorder,
+                    contentDescription = "Like",
+                    tint = Color.White,
+                    modifier = Modifier.size(32.dp)
+                )
+            }
+        }
+
+        // Comment button
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            IconButton(
+                onClick = onCommentClick,
+                modifier = Modifier.size(48.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ChatBubbleOutline,
+                    contentDescription = "Comment",
+                    tint = Color.White,
+                    modifier = Modifier.size(32.dp)
+                )
+            }
+        }
+
+        // Share button
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            IconButton(
+                onClick = onShareClick,
+                modifier = Modifier.size(48.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Share,
+                    contentDescription = "Share",
+                    tint = Color.White,
+                    modifier = Modifier.size(32.dp)
+                )
+            }
+        }
     }
 }

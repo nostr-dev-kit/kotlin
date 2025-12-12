@@ -15,7 +15,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.ui.PlayerView
 
 /**
@@ -46,18 +48,26 @@ fun VideoPlayer(
 ) {
     val context = LocalContext.current
 
-    // Create player instance
-    val player = remember {
-        ExoPlayer.Builder(context).build().apply {
-            // Configure for auto-play looping
-            repeatMode = Player.REPEAT_MODE_ONE
-            volume = 0f  // Start muted
+    // Create player instance with optimized buffering
+    val player = remember(videoUrl) {
+        ExoPlayer.Builder(context)
+            .build()
+            .apply {
+                // Configure for auto-play looping
+                repeatMode = Player.REPEAT_MODE_ONE
+                volume = 0f  // Start muted
 
-            // Prepare media
-            val mediaItem = MediaItem.fromUri(videoUrl)
-            setMediaItem(mediaItem)
-            prepare()
-        }
+                // Prepare media with preloading
+                val mediaItem = MediaItem.Builder()
+                    .setUri(videoUrl)
+                    .build()
+
+                setMediaItem(mediaItem)
+                // Start preparing immediately for faster playback
+                prepare()
+                // Preload by setting playWhenReady but pausing if not active
+                playWhenReady = false
+            }
     }
 
     // Update mute state
@@ -76,7 +86,7 @@ fun VideoPlayer(
 
     // Lifecycle management
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    DisposableEffect(lifecycle) {
+    DisposableEffect(lifecycle, videoUrl) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_PAUSE -> player.pause()
@@ -88,6 +98,7 @@ fun VideoPlayer(
 
         onDispose {
             lifecycle.removeObserver(observer)
+            player.stop()
             player.release()
         }
     }

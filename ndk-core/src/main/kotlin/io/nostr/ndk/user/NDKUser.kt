@@ -12,10 +12,13 @@ import io.nostr.ndk.nips.contacts
 import io.nostr.ndk.nips.followedPubkeys
 import io.nostr.ndk.subscription.NDKSubscription
 import io.nostr.ndk.utils.Nip19
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 
 /**
  * Represents a Nostr user and provides convenient access to user data.
@@ -61,6 +64,10 @@ open class NDKUser(
      */
     val contactListEvent: StateFlow<NDKEvent?> = _contactList.asStateFlow()
 
+    private var scope: CoroutineScope? = null
+    private var profileJob: Job? = null
+    private var contactListJob: Job? = null
+
     /**
      * Returns the npub (bech32-encoded) representation of the user's pubkey.
      */
@@ -82,10 +89,20 @@ open class NDKUser(
 
         val subscription = ndk.subscribe(filter)
 
-        // Update internal state when profile is received
-        subscription.events.map { event ->
-            if (event.kind == 0) {
-                parseProfile(event)?.let { _profile.value = it }
+        // Cancel previous job if exists
+        profileJob?.cancel()
+
+        // Create scope if needed
+        if (scope == null) {
+            scope = CoroutineScope(Dispatchers.Default)
+        }
+
+        // Collect events and update internal state
+        profileJob = scope?.launch {
+            subscription.events.collect { event ->
+                if (event.kind == 0) {
+                    parseProfile(event)?.let { _profile.value = it }
+                }
             }
         }
 
@@ -106,9 +123,20 @@ open class NDKUser(
 
         val subscription = ndk.subscribe(filter)
 
-        subscription.events.map { event ->
-            if (event.kind == KIND_CONTACT_LIST) {
-                _contactList.value = event
+        // Cancel previous job if exists
+        contactListJob?.cancel()
+
+        // Create scope if needed
+        if (scope == null) {
+            scope = CoroutineScope(Dispatchers.Default)
+        }
+
+        // Collect events and update internal state
+        contactListJob = scope?.launch {
+            subscription.events.collect { event ->
+                if (event.kind == KIND_CONTACT_LIST) {
+                    _contactList.value = event
+                }
             }
         }
 
@@ -229,6 +257,17 @@ open class NDKUser(
 
     override fun toString(): String {
         return "NDKUser(pubkey=${pubkey.take(8)}...)"
+    }
+
+    /**
+     * Cancels all active collection jobs.
+     * Call this when the NDKUser instance is no longer needed.
+     */
+    fun cleanup() {
+        profileJob?.cancel()
+        contactListJob?.cancel()
+        profileJob = null
+        contactListJob = null
     }
 }
 

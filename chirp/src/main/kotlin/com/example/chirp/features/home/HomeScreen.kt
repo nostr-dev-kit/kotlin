@@ -26,6 +26,7 @@ fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
+    val relayFilterState by viewModel.relayFilterState.collectAsState()
 
     Scaffold(
         topBar = {
@@ -71,6 +72,14 @@ fun HomeScreen(
                 )
             }
 
+            // Relay filter dropdown
+            RelayFilterDropdown(
+                currentMode = relayFilterState.mode,
+                availableRelaySets = relayFilterState.availableRelaySets,
+                onSelectMode = viewModel::selectRelayFilter,
+                modifier = Modifier.fillMaxWidth()
+            )
+
             // Feed
             Box(modifier = Modifier.fillMaxSize()) {
                 if (state.notes.isEmpty() && !state.isLoading) {
@@ -112,6 +121,93 @@ fun HomeScreen(
                     modifier = Modifier.padding(16.dp)
                 ) {
                     Text(error)
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RelayFilterDropdown(
+    currentMode: RelayFilterMode,
+    availableRelaySets: List<io.nostr.ndk.nips.RelaySet>,
+    onSelectMode: (RelayFilterMode) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    val currentLabel = when (currentMode) {
+        is RelayFilterMode.AllRelays -> "All relays"
+        is RelayFilterMode.RelaySetFilter -> {
+            val relaySet = currentMode.relaySet
+            relaySet.title ?: relaySet.identifier
+        }
+    }
+
+    Box(modifier = modifier) {
+        Surface(
+            onClick = { expanded = true },
+            modifier = Modifier.fillMaxWidth(),
+            tonalElevation = 1.dp
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = currentLabel,
+                    style = MaterialTheme.typography.labelLarge
+                )
+                Text(
+                    text = "▼",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+        }
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            // "All relays" option
+            DropdownMenuItem(
+                text = { Text("All relays") },
+                onClick = {
+                    onSelectMode(RelayFilterMode.AllRelays)
+                    expanded = false
+                }
+            )
+
+            if (availableRelaySets.isNotEmpty()) {
+                HorizontalDivider()
+
+                // Relay sets
+                availableRelaySets.forEach { relaySet ->
+                    DropdownMenuItem(
+                        text = {
+                            Column {
+                                Text(
+                                    text = relaySet.title ?: relaySet.identifier,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                if (relaySet.title != null && relaySet.title != relaySet.identifier) {
+                                    Text(
+                                        text = relaySet.identifier,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        },
+                        onClick = {
+                            onSelectMode(RelayFilterMode.RelaySetFilter(relaySet))
+                            expanded = false
+                        }
+                    )
                 }
             }
         }

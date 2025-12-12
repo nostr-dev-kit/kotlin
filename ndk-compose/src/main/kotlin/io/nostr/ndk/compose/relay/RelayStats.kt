@@ -71,12 +71,14 @@ fun RelayStats(
             )
         }
 
-        if (showLastConnected && stats.lastConnectedAt != null) {
-            Text(
-                text = "Last connected: ${formatTimestamp(stats.lastConnectedAt)}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+        if (showLastConnected) {
+            stats.lastConnectedAt?.let { timestamp ->
+                Text(
+                    text = "Last connected: ${formatTimestamp(timestamp)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }

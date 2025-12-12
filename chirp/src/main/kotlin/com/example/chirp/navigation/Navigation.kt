@@ -125,6 +125,9 @@ fun ChirpNavigation(
                 },
                 onNavigateToContentRendererSettings = {
                     navController.navigate(Routes.ContentRendererSettings.route)
+                },
+                onNavigateToRelaySettings = {
+                    navController.navigate(Routes.RelaySettings.route)
                 }
             )
         }
@@ -146,6 +149,14 @@ fun ChirpNavigation(
                 onSettingsChanged = { newSettings ->
                     viewModel.updateSettings(newSettings)
                 },
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(Routes.RelaySettings.route) {
+            com.example.chirp.features.settings.relay.RelaySettingsScreen(
                 onNavigateBack = {
                     navController.popBackStack()
                 }

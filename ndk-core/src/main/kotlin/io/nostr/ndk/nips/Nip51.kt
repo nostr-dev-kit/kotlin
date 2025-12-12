@@ -15,6 +15,7 @@ import io.nostr.ndk.models.PublicKey
  * - 10001: Pin list
  * - 30000: Categorized people list
  * - 30001: Categorized bookmark list
+ * - 30002: Relay sets
  */
 
 /**
@@ -24,6 +25,7 @@ const val KIND_MUTE_LIST = 10000
 const val KIND_PIN_LIST = 10001
 const val KIND_PEOPLE_LIST = 30000
 const val KIND_BOOKMARK_LIST = 30001
+const val KIND_RELAY_SET = 30002
 
 /**
  * Represents an item in a list.
@@ -62,10 +64,16 @@ val NDKEvent.isBookmarkList: Boolean
     get() = kind == KIND_BOOKMARK_LIST
 
 /**
+ * Returns true if this event is a relay set (kind 30002).
+ */
+val NDKEvent.isRelaySet: Boolean
+    get() = kind == KIND_RELAY_SET
+
+/**
  * Returns true if this event is any kind of list.
  */
 val NDKEvent.isList: Boolean
-    get() = isMuteList || isPinList || isPeopleList || isBookmarkList
+    get() = isMuteList || isPinList || isPeopleList || isBookmarkList || isRelaySet
 
 /**
  * Gets the list name/identifier from the d tag.
@@ -183,3 +191,13 @@ fun NDKEvent.listContainsPubkey(pubkey: PublicKey): Boolean {
 fun NDKEvent.listContainsEvent(eventId: EventId): Boolean {
     return listItems.any { it is ListItem.Event && it.eventId == eventId }
 }
+
+/**
+ * Gets relay URLs from a relay set (kind 30002).
+ * Returns empty list if not a relay set.
+ */
+val NDKEvent.relaySetRelays: List<String>
+    get() {
+        if (!isRelaySet) return emptyList()
+        return tagsWithName("relay").mapNotNull { it.values.getOrNull(0) }
+    }

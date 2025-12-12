@@ -13,6 +13,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.chirp.features.home.components.NoteCard
+import io.nostr.ndk.compose.user.UserAvatar
+import io.nostr.ndk.compose.user.UserDisplayName
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -73,15 +75,28 @@ fun ProfileScreen(
                         item {
                             Column(
                                 modifier = Modifier.fillMaxWidth(),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                Text(
-                                    text = profile?.displayName ?: profile?.name
-                                        ?: user.pubkey.substring(0, 16) + "...",
-                                    style = MaterialTheme.typography.headlineMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                // Avatar and name
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    UserAvatar(
+                                        pubkey = user.pubkey,
+                                        ndk = viewModel.ndk,
+                                        size = 80.dp
+                                    )
 
+                                    UserDisplayName(
+                                        pubkey = user.pubkey,
+                                        ndk = viewModel.ndk,
+                                        style = MaterialTheme.typography.headlineMedium
+                                            .copy(fontWeight = FontWeight.Bold)
+                                    )
+                                }
+
+                                // Bio
                                 profile?.about?.let { about ->
                                     Text(
                                         text = about,

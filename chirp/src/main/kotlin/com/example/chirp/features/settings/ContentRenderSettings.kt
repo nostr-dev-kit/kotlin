@@ -142,6 +142,43 @@ fun ContentRenderSettingsScreen(
                 }
             }
 
+            // Section: Links
+            Text(
+                text = "Links",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(top = 24.dp, bottom = 8.dp)
+            )
+
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column {
+                    RendererStyleOption(
+                        title = "Basic",
+                        description = "Simple underlined link",
+                        selected = currentSettings.linkStyle == RendererStyle.DEFAULT,
+                        onClick = {
+                            currentSettings = currentSettings.copy(
+                                linkStyle = RendererStyle.DEFAULT,
+                                enableLinkPreviews = false
+                            )
+                            onSettingsChanged(currentSettings)
+                        }
+                    )
+
+                    RendererStyleOption(
+                        title = "Preview Card",
+                        description = "OpenGraph preview with image, title, description",
+                        selected = currentSettings.linkStyle == RendererStyle.CARD && currentSettings.enableLinkPreviews,
+                        onClick = {
+                            currentSettings = currentSettings.copy(
+                                linkStyle = RendererStyle.CARD,
+                                enableLinkPreviews = true
+                            )
+                            onSettingsChanged(currentSettings)
+                        }
+                    )
+                }
+            }
+
             // Section: User Mentions
             Text(
                 text = "User Mentions",
