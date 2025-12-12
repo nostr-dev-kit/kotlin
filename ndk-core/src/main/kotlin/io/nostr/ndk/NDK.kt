@@ -7,13 +7,26 @@ import io.nostr.ndk.crypto.NDKSigner
 import io.nostr.ndk.models.NDKFilter
 import io.nostr.ndk.models.PublicKey
 import io.nostr.ndk.outbox.NDKOutboxTracker
+import io.nostr.ndk.outbox.NDKRelaySetCalculator
+import io.nostr.ndk.outbox.OutboxMetrics
+import io.nostr.ndk.outbox.OutboxMetricsEvent
 import io.nostr.ndk.relay.NDKPool
 import io.nostr.ndk.subscription.NDKSubscription
 import io.nostr.ndk.subscription.NDKSubscriptionManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 
 /**
  * Main entry point for the Nostr Development Kit (NDK).
@@ -21,7 +34,7 @@ import kotlinx.coroutines.flow.update
  * NDK manages relay connections, subscriptions, event publishing, and account management.
  * It provides a streaming-first API where events are delivered via Kotlin Flows.
  *
- * Example usage:
+ * ## Basic Usage
  * ```kotlin
  * val ndk = NDK(
  *     explicitRelayUrls = setOf("wss://relay.damus.io", "wss://nos.lol"),
@@ -41,9 +54,32 @@ import kotlinx.coroutines.flow.update
  * }
  * ```
  *
+ * ## Outbox Model (NIP-65)
+ *
+ * NDK implements the outbox model for efficient relay selection. When enabled:
+ * - Subscriptions with author filters query each author's write relays
+ * - Relay lists (kind 10002) are auto-tracked and cached
+ * - Subscriptions dynamically add relays as relay lists are discovered
+ *
+ * ```kotlin
+ * // Configure outbox model (enabled by default)
+ * ndk.enableOutboxModel = true         // Enable/disable outbox relay selection
+ * ndk.relayGoalPerAuthor = 2           // Target relays per author (default: 2)
+ * ndk.autoConnectUserRelays = true     // Auto-connect to user's relays on login
+ *
+ * // Default outbox relays for relay list discovery
+ * ndk.outboxRelayUrls.add("wss://purplepag.es")
+ *
+ * // Subscribe with outbox model - automatically queries author's write relays
+ * val filter = NDKFilter(authors = setOf("alice", "bob"), kinds = setOf(1))
+ * val sub = ndk.subscribe(filter)
+ *
+ * // As relay lists are discovered, subscriptions update automatically
+ * ```
+ *
  * @param explicitRelayUrls Set of relay URLs to connect to
  * @param signer Optional signer for signing and publishing events (deprecated, use login())
- * @param cacheAdapter Optional cache adapter for event persistence
+ * @param cacheAdapter Optional cache adapter for event persistence (required for outbox model caching)
  * @param accountStorage Optional storage for persisting account data
  */
 class NDK(
@@ -53,10 +89,53 @@ class NDK(
     val accountStorage: NDKAccountStorage? = null
 ) {
     /**
+     * Whether to use the outbox model for relay selection.
+     * When enabled, subscriptions with author filters will query each author's write relays.
+     */
+    var enableOutboxModel: Boolean = true
+
+    /**
+     * Whether to automatically connect to the user's relays when a signer is set.
+     * When enabled, fetches the user's relay list and adds those relays to the pool.
+     */
+    var autoConnectUserRelays: Boolean = true
+
+    /**
+     * Target number of relays to query per author when using outbox model.
+     * Higher values increase redundancy but may slow down queries.
+     */
+    var relayGoalPerAuthor: Int = 2
+
+    /**
+     * URLs of relays dedicated to fetching relay lists (NIP-65).
+     * These relays are queried when looking up a user's relay list.
+     */
+    val outboxRelayUrls: MutableSet<String> = mutableSetOf(
+        "wss://purplepag.es",
+        "wss://relay.nos.social"
+    )
+    /**
      * Lazy initialized relay pool.
      * The pool manages all relay connections and their lifecycle.
      */
     val pool: NDKPool by lazy { NDKPool(this) }
+
+    /**
+     * Lazy delegate for outbox pool, stored for lifecycle management.
+     */
+    private val _outboxPool = lazy {
+        val pool = NDKPool(this)
+        outboxRelayUrls.forEach { url ->
+            pool.addRelay(url, connect = false)
+        }
+        pool
+    }
+
+    /**
+     * Lazy initialized outbox relay pool.
+     * This pool is dedicated to fetching relay lists (NIP-65) for the outbox model.
+     */
+    val outboxPool: NDKPool by _outboxPool
 
     /**
      * Lazy initialized subscription manager.
@@ -69,6 +148,42 @@ class NDK(
      * Manages relay lists (NIP-65) and provides outbox model capabilities.
      */
     val outboxTracker: NDKOutboxTracker by lazy { NDKOutboxTracker(this) }
+
+    /**
+     * Metrics for outbox model operations.
+     * Use [outboxMetrics.snapshot()] to get current aggregated metrics.
+     */
+    val outboxMetrics: OutboxMetrics by lazy { OutboxMetrics() }
+
+    /**
+     * Flow of detailed outbox events for real-time observability.
+     * Subscribe to this flow for debugging or building monitoring dashboards.
+     */
+    private val _outboxEvents = MutableSharedFlow<OutboxMetricsEvent>(
+        replay = 0,
+        extraBufferCapacity = 256
+    )
+    val outboxEvents: SharedFlow<OutboxMetricsEvent> = _outboxEvents.asSharedFlow()
+
+    /**
+     * Emits an outbox event for observability.
+     * Called internally by outbox components.
+     */
+    internal fun emitOutboxEvent(event: OutboxMetricsEvent) {
+        _outboxEvents.tryEmit(event)
+    }
+
+    /**
+     * Lazy initialized relay set calculator.
+     * Calculates optimal relays for subscriptions based on outbox model.
+     */
+    internal val relaySetCalculator: NDKRelaySetCalculator by lazy { NDKRelaySetCalculator(this) }
+
+    /**
+     * Coroutine scope for NDK operations.
+     * Internal to allow components like relaySetCalculator to use it.
+     */
+    internal val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     // Account management
     private val _currentUser = MutableStateFlow<NDKCurrentUser?>(null)
@@ -217,16 +332,22 @@ class NDK(
     }
 
     /**
-     * Connects to all explicit relays.
-     * Adds each relay URL to the pool and initiates connections.
+     * Connects to all explicit relays and outbox relays.
+     * Both pools are connected in parallel for faster startup.
      *
      * @param timeoutMs Maximum time to wait for connections (default: 5000ms)
      */
     suspend fun connect(timeoutMs: Long = 5000) {
+        // Add explicit relays to main pool
         explicitRelayUrls.forEach { url ->
             pool.addRelay(url, connect = true)
         }
-        pool.connect(timeoutMs)
+
+        // Connect both pools in parallel
+        coroutineScope {
+            launch { pool.connect(timeoutMs) }
+            launch { outboxPool.connect(timeoutMs) }
+        }
     }
 
     /**
@@ -246,6 +367,9 @@ class NDK(
      * If a cache adapter is configured, cached events are emitted first,
      * followed by events from relays (cache-first strategy).
      *
+     * When outbox model is enabled and filters contain authors, the subscription
+     * will use the authors' write relays instead of all connected relays.
+     *
      * @param filters List of filters to match events against
      * @return A new subscription that will emit matching events
      */
@@ -255,10 +379,73 @@ class NDK(
         // Load cached events first (cache-first strategy)
         subscription.loadFromCache()
 
-        // Then subscribe to relays for new events
-        subscription.start(pool.connectedRelays.value)
+        // Calculate optimal relays based on outbox model (uses runBlocking for cache lookup)
+        val relays = runBlocking {
+            relaySetCalculator.calculateRelaysForFilters(filters)
+        }
+
+        // Start subscription on calculated relays
+        subscription.start(relays)
+
+        // Emit metrics event for relay calculation
+        if (enableOutboxModel) {
+            val authors = filters.flatMap { it.authors ?: emptySet() }.toSet()
+            if (authors.isNotEmpty()) {
+                val coveredAuthors = runBlocking {
+                    authors.count { outboxTracker.getRelayList(it) != null }
+                }
+                emitOutboxEvent(OutboxMetricsEvent.SubscriptionRelaysCalculated(
+                    subscriptionId = subscription.id,
+                    authorCount = authors.size,
+                    relayCount = relays.size,
+                    coveredAuthors = coveredAuthors,
+                    uncoveredAuthors = authors.size - coveredAuthors
+                ))
+            }
+        }
+
+        // Track subscription for dynamic relay updates if outbox model enabled
+        if (enableOutboxModel) {
+            trackSubscriptionForRelayUpdates(subscription, filters)
+        }
 
         return subscription
+    }
+
+    /**
+     * Tracks a subscription for dynamic relay updates.
+     * When relay lists are discovered for authors in the filter,
+     * the subscription is updated to include those relays.
+     */
+    private fun trackSubscriptionForRelayUpdates(subscription: NDKSubscription, filters: List<NDKFilter>) {
+        val authors = filters.flatMap { it.authors ?: emptySet() }.toSet()
+        if (authors.isEmpty()) return
+
+        val job = scope.launch {
+            outboxTracker.onRelayListDiscovered.collect { (pubkey, relayList) ->
+                if (pubkey in authors) {
+                    val newRelays = relayList.writeRelays.mapNotNull { url ->
+                        if (subscription.hasRelay(url)) null
+                        else pool.getRelay(url) ?: pool.addTemporaryRelay(url)
+                    }
+                    if (newRelays.isNotEmpty()) {
+                        subscription.addRelays(newRelays.toSet())
+
+                        // Emit metrics for each dynamically added relay
+                        newRelays.forEach { relay ->
+                            outboxMetrics.recordDynamicRelayAdded()
+                            outboxMetrics.recordRelayUsed(relay.url)
+                            emitOutboxEvent(OutboxMetricsEvent.SubscriptionRelayAdded(
+                                subscriptionId = subscription.id,
+                                relayUrl = relay.url,
+                                forPubkey = pubkey
+                            ))
+                        }
+                    }
+                }
+            }
+        }
+        subscription.setRelayUpdateJob(job)
     }
 
     /**
@@ -287,15 +474,24 @@ class NDK(
      * Closes the NDK instance and releases all resources.
      *
      * This method:
-     * - Disconnects from all relays
+     * - Disconnects from all relays (both main pool and outbox pool)
      * - Cancels all reconnection attempts
      * - Clears all subscriptions
-     * - Releases all coroutine scopes
+     * - Cancels all pending async operations (relay list fetches, etc.)
      *
      * After calling close(), this NDK instance should not be used.
      * Create a new instance if needed.
      */
     fun close() {
+        // Cancel all async operations
+        scope.cancel()
+
+        // Close main pool
         pool.close()
+
+        // Close outbox pool if it was initialized
+        if (_outboxPool.isInitialized()) {
+            outboxPool.close()
+        }
     }
 }

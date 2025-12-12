@@ -15,6 +15,7 @@ import com.example.chirp.features.thread.ThreadScreen
 import com.example.chirp.features.profile.ProfileScreen
 import com.example.chirp.features.search.SearchScreen
 import com.example.chirp.features.settings.SettingsScreen
+import com.example.chirp.features.debug.DebugScreen
 import com.example.chirp.features.images.ImageDetailScreen
 import com.example.chirp.features.images.ImageFeedViewModel
 import com.example.chirp.features.images.upload.ImageUploadScreen
@@ -113,6 +114,17 @@ fun ChirpNavigation(
 
         composable(Routes.Settings.route) {
             SettingsScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                },
+                onNavigateToDebug = {
+                    navController.navigate(Routes.Debug.route)
+                }
+            )
+        }
+
+        composable(Routes.Debug.route) {
+            DebugScreen(
                 onNavigateBack = {
                     navController.popBackStack()
                 }

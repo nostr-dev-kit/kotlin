@@ -4,7 +4,9 @@ import io.nostr.ndk.NDK
 import io.nostr.ndk.cache.InMemoryCacheAdapter
 import io.nostr.ndk.models.NDKEvent
 import io.nostr.ndk.models.NDKTag
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.yield
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
@@ -187,6 +189,64 @@ class NDKOutboxTrackerTest {
 
         assertEquals(1, relaysToPublish.size)
         assertTrue(relaysToPublish.contains("wss://bob-inbox.com"))
+    }
+
+    // ===========================================
+    // fetchRelayList Tests
+    // ===========================================
+
+    @Test
+    fun `fetchRelayList returns cached relay list immediately`() = runTest {
+        // Cache a relay list
+        cache.store(createRelayListEvent(
+            pubkey = "cached-user",
+            tags = listOf(listOf("r", "wss://cached-relay.com", "write"))
+        ))
+
+        val result = tracker.fetchRelayList("cached-user")
+
+        assertNotNull(result)
+        assertEquals("cached-user", result!!.pubkey)
+        assertTrue(result.writeRelays.contains("wss://cached-relay.com"))
+    }
+
+    @Test
+    fun `fetchRelayList returns null for unknown pubkey with no relays`() = runTest {
+        // No cache, no relays to query
+        val result = tracker.fetchRelayList("unknown-pubkey")
+
+        // Should return null since we can't find the relay list
+        assertNull(result)
+    }
+
+    @Test
+    fun `trackRelayList emits relay list update event`() = runTest {
+        val receivedUpdates = mutableListOf<Pair<String, RelayList>>()
+
+        // Collect updates in background
+        val job = launch {
+            tracker.onRelayListDiscovered.collect { update ->
+                receivedUpdates.add(update)
+            }
+        }
+
+        // Give time for collector to start
+        yield()
+
+        val event = createRelayListEvent(
+            pubkey = "new-user",
+            tags = listOf(listOf("r", "wss://new-relay.com", "write"))
+        )
+        tracker.trackRelayList(event)
+
+        // Give time for emission
+        yield()
+
+        job.cancel()
+
+        assertEquals(1, receivedUpdates.size)
+        assertEquals("new-user", receivedUpdates[0].first)
+        assertTrue(receivedUpdates[0].second.writeRelays.contains("wss://new-relay.com"))
     }
 
     // Helper

@@ -11,7 +11,8 @@ import androidx.compose.ui.unit.dp
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
-    onNavigateBack: () -> Unit = {}
+    onNavigateBack: () -> Unit = {},
+    onNavigateToDebug: () -> Unit = {}
 ) {
     Scaffold(
         topBar = {
@@ -94,6 +95,31 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("Logout")
+                    }
+                }
+            }
+
+            Card(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "Developer",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Text(
+                        text = "Debug tools for monitoring NDK internals",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedButton(
+                        onClick = onNavigateToDebug,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Outbox Debug")
                     }
                 }
             }
