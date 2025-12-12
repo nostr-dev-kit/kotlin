@@ -29,7 +29,26 @@ private val LightColorScheme = lightColorScheme(
     tertiary = Color(0xFF9A9A9A)            // textTertiary
 )
 
-private val DarkColorScheme = darkColorScheme()
+// Dark Color Scheme
+private val DarkColorScheme = darkColorScheme(
+    primary = Color(0xFF8B8FE8),           // accent (lighter for dark bg)
+    onPrimary = Color(0xFF1A1A1A),
+    primaryContainer = Color(0x1F8B8FE8),   // accentSoft (12% opacity)
+
+    background = Color(0xFF0F0F0F),         // bgPrimary
+    surface = Color(0xFF1A1A1A),            // bgSecondary
+    surfaceVariant = Color(0xFF242424),     // bgTertiary
+    surfaceContainer = Color(0xFF2A2A2A),   // bgHover
+
+    onBackground = Color(0xFFF5F5F5),       // textPrimary
+    onSurface = Color(0xFFF5F5F5),
+    onSurfaceVariant = Color(0xFFA0A0A0),   // textSecondary
+    outline = Color(0x1FFFFFFF),             // border (12% white)
+    outlineVariant = Color(0x33FFFFFF),      // borderStrong (20% white)
+
+    error = Color(0xFFFF6B6B),
+    tertiary = Color(0xFF6B6B6B)             // textTertiary
+)
 
 // Semantic colors
 object SemanticColors {
