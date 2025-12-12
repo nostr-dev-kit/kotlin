@@ -16,4 +16,8 @@ sealed class Routes(val route: String) {
     data object Search : Routes("search")
     data object Settings : Routes("settings")
     data object Debug : Routes("debug")
+    data object ImageDetail : Routes("image_detail/{galleryId}") {
+        fun createRoute(galleryId: String): String = "image_detail/$galleryId"
+    }
+    data object ImageUpload : Routes("image_upload")
 }
