@@ -63,7 +63,16 @@ class NDKRelaySetCalculator(private val ndk: NDK) {
             }
         }
 
-        return selectOptimalRelays(authorRelays)
+        val relays = selectOptimalRelays(authorRelays)
+
+        // Record metrics
+        val coveredCount = authors.size - uncoveredAuthors.size
+        ndk.outboxMetrics.recordSubscriptionCalculated(authors.size, coveredCount)
+        relays.forEach { relay ->
+            ndk.outboxMetrics.recordRelayUsed(relay.url)
+        }
+
+        return relays
     }
 
     /**

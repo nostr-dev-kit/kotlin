@@ -8,6 +8,8 @@ import io.nostr.ndk.models.NDKFilter
 import io.nostr.ndk.models.PublicKey
 import io.nostr.ndk.outbox.NDKOutboxTracker
 import io.nostr.ndk.outbox.NDKRelaySetCalculator
+import io.nostr.ndk.outbox.OutboxMetrics
+import io.nostr.ndk.outbox.OutboxMetricsEvent
 import io.nostr.ndk.relay.NDKPool
 import io.nostr.ndk.subscription.NDKSubscription
 import io.nostr.ndk.subscription.NDKSubscriptionManager
@@ -16,8 +18,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -143,6 +148,30 @@ class NDK(
      * Manages relay lists (NIP-65) and provides outbox model capabilities.
      */
     val outboxTracker: NDKOutboxTracker by lazy { NDKOutboxTracker(this) }
+
+    /**
+     * Metrics for outbox model operations.
+     * Use [outboxMetrics.snapshot()] to get current aggregated metrics.
+     */
+    val outboxMetrics: OutboxMetrics by lazy { OutboxMetrics() }
+
+    /**
+     * Flow of detailed outbox events for real-time observability.
+     * Subscribe to this flow for debugging or building monitoring dashboards.
+     */
+    private val _outboxEvents = MutableSharedFlow<OutboxMetricsEvent>(
+        replay = 0,
+        extraBufferCapacity = 256
+    )
+    val outboxEvents: SharedFlow<OutboxMetricsEvent> = _outboxEvents.asSharedFlow()
+
+    /**
+     * Emits an outbox event for observability.
+     * Called internally by outbox components.
+     */
+    internal fun emitOutboxEvent(event: OutboxMetricsEvent) {
+        _outboxEvents.tryEmit(event)
+    }
 
     /**
      * Lazy initialized relay set calculator.
@@ -358,6 +387,23 @@ class NDK(
         // Start subscription on calculated relays
         subscription.start(relays)
 
+        // Emit metrics event for relay calculation
+        if (enableOutboxModel) {
+            val authors = filters.flatMap { it.authors ?: emptySet() }.toSet()
+            if (authors.isNotEmpty()) {
+                val coveredAuthors = runBlocking {
+                    authors.count { outboxTracker.getRelayList(it) != null }
+                }
+                emitOutboxEvent(OutboxMetricsEvent.SubscriptionRelaysCalculated(
+                    subscriptionId = subscription.id,
+                    authorCount = authors.size,
+                    relayCount = relays.size,
+                    coveredAuthors = coveredAuthors,
+                    uncoveredAuthors = authors.size - coveredAuthors
+                ))
+            }
+        }
+
         // Track subscription for dynamic relay updates if outbox model enabled
         if (enableOutboxModel) {
             trackSubscriptionForRelayUpdates(subscription, filters)
@@ -384,6 +430,17 @@ class NDK(
                     }
                     if (newRelays.isNotEmpty()) {
                         subscription.addRelays(newRelays.toSet())
+
+                        // Emit metrics for each dynamically added relay
+                        newRelays.forEach { relay ->
+                            outboxMetrics.recordDynamicRelayAdded()
+                            outboxMetrics.recordRelayUsed(relay.url)
+                            emitOutboxEvent(OutboxMetricsEvent.SubscriptionRelayAdded(
+                                subscriptionId = subscription.id,
+                                relayUrl = relay.url,
+                                forPubkey = pubkey
+                            ))
+                        }
                     }
                 }
             }

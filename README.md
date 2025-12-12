@@ -265,6 +265,90 @@ ndk-android/
 └── sample-app/                  # Sample Android application
 ```
 
+## Outbox Model (NIP-65)
+
+NDK implements the outbox model for efficient relay selection:
+
+```kotlin
+// Configure outbox model (enabled by default)
+ndk.enableOutboxModel = true         // Enable/disable outbox relay selection
+ndk.relayGoalPerAuthor = 2           // Target relays per author (default: 2)
+
+// Default outbox relays for relay list discovery
+ndk.outboxRelayUrls.add("wss://purplepag.es")
+
+// Subscribe with outbox model - automatically queries author's write relays
+val filter = NDKFilter(authors = setOf("alice", "bob"), kinds = setOf(1))
+val sub = ndk.subscribe(filter)
+
+// As relay lists are discovered, subscriptions update automatically
+```
+
+### Outbox Observability
+
+NDK provides comprehensive observability for the outbox model through both aggregated metrics and detailed event streams.
+
+#### Quick Stats (Aggregated Metrics)
+
+```kotlin
+val stats = ndk.outboxMetrics.snapshot()
+
+// Cache performance
+println("Cache hit rate: ${stats.cacheHitRate * 100}%")
+println("Known relay lists: ${stats.knownRelayListCount}")
+
+// Fetch performance
+println("Fetch success rate: ${stats.fetchSuccessRate * 100}%")
+println("Avg fetch duration: ${stats.avgFetchDurationMs}ms")
+println("Timeouts: ${stats.fetchesTimedOut}")
+
+// Subscription coverage
+println("Author coverage: ${stats.authorCoverageRate * 100}%")
+println("Dynamic relays added: ${stats.dynamicRelaysAdded}")
+
+// Top relays
+println("Most used relays: ${stats.topRelays(5)}")
+
+// Full summary
+println(stats.toString())
+```
+
+#### Real-Time Event Stream
+
+For debugging or building monitoring dashboards:
+
+```kotlin
+ndk.outboxEvents.collect { event ->
+    when (event) {
+        // Cache events
+        is OutboxMetricsEvent.RelayListCacheHit ->
+            println("Cache hit for ${event.pubkey}")
+        is OutboxMetricsEvent.RelayListCacheMiss ->
+            println("Cache miss for ${event.pubkey}")
+
+        // Fetch events
+        is OutboxMetricsEvent.RelayListFetchStarted ->
+            println("Fetching ${event.pubkey} from ${event.pool} pool")
+        is OutboxMetricsEvent.RelayListFetchSuccess ->
+            println("Found ${event.pubkey} in ${event.durationMs}ms")
+        is OutboxMetricsEvent.RelayListFetchTimeout ->
+            println("Timeout fetching ${event.pubkey}")
+        is OutboxMetricsEvent.RelayListFetchNoRelays ->
+            println("No relays available for ${event.pubkey}")
+
+        // Subscription events
+        is OutboxMetricsEvent.SubscriptionRelaysCalculated ->
+            println("Sub ${event.subscriptionId}: ${event.coveredAuthors}/${event.authorCount} authors covered")
+        is OutboxMetricsEvent.SubscriptionRelayAdded ->
+            println("Dynamic relay ${event.relayUrl} added for ${event.forPubkey}")
+
+        // Discovery events
+        is OutboxMetricsEvent.RelayListTracked ->
+            println("Tracked ${event.pubkey}: ${event.writeRelayCount} write relays")
+    }
+}
+```
+
 ## Architecture
 
 ```

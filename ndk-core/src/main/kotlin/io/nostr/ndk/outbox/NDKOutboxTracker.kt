@@ -38,8 +38,16 @@ class NDKOutboxTracker(private val ndk: NDK) {
      */
     suspend fun getRelayList(pubkey: PublicKey): RelayList? {
         val cache = ndk.cacheAdapter ?: return null
-        val event = cache.getRelayList(pubkey) ?: return null
-        return RelayList.fromEvent(event)
+        val event = cache.getRelayList(pubkey)
+        if (event != null) {
+            ndk.outboxMetrics.recordCacheHit(pubkey)
+            ndk.emitOutboxEvent(OutboxMetricsEvent.RelayListCacheHit(pubkey))
+            return RelayList.fromEvent(event)
+        } else {
+            ndk.outboxMetrics.recordCacheMiss()
+            ndk.emitOutboxEvent(OutboxMetricsEvent.RelayListCacheMiss(pubkey))
+            return null
+        }
     }
 
     /**
@@ -145,6 +153,14 @@ class NDKOutboxTracker(private val ndk: NDK) {
         // Emit update for subscriptions to react to
         val relayList = RelayList.fromEvent(event)
         _relayListUpdates.emit(event.pubkey to relayList)
+
+        // Record metrics
+        ndk.outboxMetrics.recordRelayListKnown(event.pubkey)
+        ndk.emitOutboxEvent(OutboxMetricsEvent.RelayListTracked(
+            pubkey = event.pubkey,
+            readRelayCount = relayList.readRelays.size,
+            writeRelayCount = relayList.writeRelays.size
+        ))
     }
 
     /**
@@ -160,15 +176,20 @@ class NDKOutboxTracker(private val ndk: NDK) {
      * @return The relay list if found, null otherwise
      */
     suspend fun fetchRelayList(pubkey: PublicKey, timeoutMs: Long = 5000): RelayList? {
-        // 1. Check cache first
+        // 1. Check cache first (getRelayList already emits cache hit/miss)
         getRelayList(pubkey)?.let { return it }
 
         // 2. Determine which pool to use
+        val poolName: String
         val pool = if (ndk.outboxPool.connectedRelays.value.isNotEmpty()) {
+            poolName = "outbox"
             ndk.outboxPool
         } else if (ndk.pool.connectedRelays.value.isNotEmpty()) {
+            poolName = "main"
             ndk.pool
         } else {
+            ndk.outboxMetrics.recordFetchNoRelays()
+            ndk.emitOutboxEvent(OutboxMetricsEvent.RelayListFetchNoRelays(pubkey))
             return null // No connected relays
         }
 
@@ -181,9 +202,18 @@ class NDKOutboxTracker(private val ndk: NDK) {
 
         // 4. Subscribe to connected relays
         val relays = pool.connectedRelays.value
-        if (relays.isEmpty()) return null
+        if (relays.isEmpty()) {
+            ndk.outboxMetrics.recordFetchNoRelays()
+            ndk.emitOutboxEvent(OutboxMetricsEvent.RelayListFetchNoRelays(pubkey))
+            return null
+        }
 
         val subscriptionId = "fetch-relaylist-${pubkey.take(8)}"
+
+        // Record fetch started
+        ndk.outboxMetrics.recordFetchStarted()
+        ndk.emitOutboxEvent(OutboxMetricsEvent.RelayListFetchStarted(pubkey, poolName))
+        val startTime = System.currentTimeMillis()
 
         try {
             // Start subscription on relays
@@ -198,10 +228,20 @@ class NDKOutboxTracker(private val ndk: NDK) {
                 }?.first
             }
 
-            // Track if found (will emit to onRelayListDiscovered)
-            event?.let { trackRelayList(it) }
+            val durationMs = System.currentTimeMillis() - startTime
 
-            return event?.let { RelayList.fromEvent(it) }
+            if (event != null) {
+                // Track success
+                ndk.outboxMetrics.recordFetchSuccess(durationMs)
+                ndk.emitOutboxEvent(OutboxMetricsEvent.RelayListFetchSuccess(pubkey, durationMs, "kind10002"))
+                trackRelayList(event)
+                return RelayList.fromEvent(event)
+            } else {
+                // Track timeout
+                ndk.outboxMetrics.recordFetchTimeout()
+                ndk.emitOutboxEvent(OutboxMetricsEvent.RelayListFetchTimeout(pubkey, timeoutMs))
+                return null
+            }
         } finally {
             // Clean up subscription
             relays.forEach { relay ->
