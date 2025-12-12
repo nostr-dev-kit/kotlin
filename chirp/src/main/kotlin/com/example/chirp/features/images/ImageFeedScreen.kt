@@ -16,7 +16,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Collections
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -49,16 +48,7 @@ fun ImageFeedScreen(
             }
         }
     ) { padding ->
-        if (state.isLoading && state.galleries.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator()
-            }
-        } else if (state.error != null && state.galleries.isEmpty()) {
+        if (state.error != null && state.galleries.isEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()

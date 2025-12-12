@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.chirp.features.home.components.NoteCard
+import com.example.chirp.ui.theme.Spacing
 import io.nostr.ndk.models.NDKEvent
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -46,27 +47,21 @@ fun ThreadScreen(
                 .padding(paddingValues)
         ) {
             when {
-                state.isLoading -> {
-                    CircularProgressIndicator(
-                        modifier = Modifier.align(Alignment.Center)
-                    )
-                }
-
                 state.error != null -> {
                     Text(
                         text = state.error ?: "Unknown error",
                         color = MaterialTheme.colorScheme.error,
                         modifier = Modifier
                             .align(Alignment.Center)
-                            .padding(16.dp)
+                            .padding(Spacing.lg)
                     )
                 }
 
                 state.mainEvent != null -> {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                        contentPadding = PaddingValues(Spacing.lg),
+                        verticalArrangement = Arrangement.spacedBy(Spacing.lg)
                     ) {
                         // Main event
                         item {
@@ -87,7 +82,7 @@ fun ThreadScreen(
                                 Text(
                                     text = "Replies (${state.replies.size})",
                                     style = MaterialTheme.typography.titleMedium,
-                                    modifier = Modifier.padding(vertical = 8.dp)
+                                    modifier = Modifier.padding(vertical = Spacing.sm)
                                 )
                             }
                         }
@@ -115,7 +110,7 @@ fun ThreadScreen(
                         text = "Event not found",
                         modifier = Modifier
                             .align(Alignment.Center)
-                            .padding(16.dp)
+                            .padding(Spacing.lg)
                     )
                 }
             }

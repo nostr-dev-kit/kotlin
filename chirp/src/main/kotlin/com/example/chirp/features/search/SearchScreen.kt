@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.chirp.features.home.components.NoteCard
+import com.example.chirp.ui.theme.Spacing
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -69,14 +70,8 @@ fun SearchScreen(
                         text = "Enter a search query to find notes",
                         modifier = Modifier
                             .align(Alignment.Center)
-                            .padding(16.dp),
+                            .padding(Spacing.lg),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                state.isSearching && state.results.isEmpty() -> {
-                    CircularProgressIndicator(
-                        modifier = Modifier.align(Alignment.Center)
                     )
                 }
 
@@ -86,7 +81,7 @@ fun SearchScreen(
                         color = MaterialTheme.colorScheme.error,
                         modifier = Modifier
                             .align(Alignment.Center)
-                            .padding(16.dp)
+                            .padding(Spacing.lg)
                     )
                 }
 
@@ -95,7 +90,7 @@ fun SearchScreen(
                         text = "No results found for \"${state.query}\"",
                         modifier = Modifier
                             .align(Alignment.Center)
-                            .padding(16.dp),
+                            .padding(Spacing.lg),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -103,8 +98,8 @@ fun SearchScreen(
                 else -> {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                        contentPadding = PaddingValues(Spacing.lg),
+                        verticalArrangement = Arrangement.spacedBy(Spacing.lg)
                     ) {
                         item {
                             Text(

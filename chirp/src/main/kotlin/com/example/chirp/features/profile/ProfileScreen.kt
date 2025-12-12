@@ -67,12 +67,6 @@ fun ProfileScreen(
                 .padding(paddingValues)
         ) {
             when {
-                state.isLoading && user == null -> {
-                    CircularProgressIndicator(
-                        modifier = Modifier.align(Alignment.Center)
-                    )
-                }
-
                 state.error != null -> {
                     Text(
                         text = state.error ?: "Unknown error",
@@ -245,19 +239,6 @@ fun ProfileScreen(
                             )
                         }
 
-                        // Loading indicator
-                        if (state.isLoading && contentItems.isEmpty()) {
-                            item {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(Spacing.xxxl),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    CircularProgressIndicator()
-                                }
-                            }
-                        }
                     }
                 }
 

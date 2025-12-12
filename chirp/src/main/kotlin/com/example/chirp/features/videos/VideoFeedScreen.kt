@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.*
@@ -36,22 +37,18 @@ import io.nostr.ndk.kinds.NDKVideo
 @Composable
 fun VideoFeedScreen(
     viewModel: VideoFeedViewModel = hiltViewModel(),
-    onNavigateToProfile: (String) -> Unit = {}
+    onNavigateToProfile: (String) -> Unit = {},
+    onNavigateToRecord: () -> Unit = {}
 ) {
     val state by viewModel.state.collectAsState()
 
-    if (state.isLoading && state.videos.isEmpty()) {
-        LoadingState()
-        return
-    }
-
     if (state.error != null && state.videos.isEmpty()) {
-        ErrorState(error = state.error!!)
+        ErrorState(error = state.error!!, onNavigateToRecord = onNavigateToRecord)
         return
     }
 
     if (state.videos.isEmpty()) {
-        EmptyState()
+        EmptyState(onNavigateToRecord = onNavigateToRecord)
         return
     }
 
@@ -77,6 +74,21 @@ fun VideoFeedScreen(
                 isMuted = state.isMuted,
                 onMuteToggle = { viewModel.toggleMute() },
                 onNavigateToProfile = onNavigateToProfile
+            )
+        }
+
+        // Record FAB
+        FloatingActionButton(
+            onClick = onNavigateToRecord,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp)
+                .padding(bottom = 80.dp), // Above bottom nav
+            containerColor = MaterialTheme.colorScheme.primary
+        ) {
+            Icon(
+                imageVector = Icons.Default.Videocam,
+                contentDescription = "Record video"
             )
         }
     }
@@ -243,55 +255,18 @@ private fun formatTimestamp(unixTimestamp: Long): String {
 }
 
 @Composable
-private fun LoadingState() {
-    val infiniteTransition = rememberInfiniteTransition(label = "loading")
-    val alpha by infiniteTransition.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "alpha"
-    )
-
+private fun EmptyState(onNavigateToRecord: () -> Unit = {}) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            CircularProgressIndicator(
-                modifier = Modifier
-                    .size(48.dp)
-                    .alpha(alpha),
-                color = Color.White
-            )
-            Text(
-                text = "Loading videos...",
-                color = Color.White.copy(alpha = 0.7f),
-                style = MaterialTheme.typography.bodyLarge
-            )
-        }
-    }
-}
-
-@Composable
-private fun EmptyState() {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black),
-        contentAlignment = Alignment.Center
+            .background(Color.Black)
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier.padding(32.dp)
+            modifier = Modifier
+                .align(Alignment.Center)
+                .padding(32.dp)
         ) {
             Icon(
                 imageVector = Icons.Default.VideoLibrary,
@@ -306,27 +281,48 @@ private fun EmptyState() {
                 textAlign = TextAlign.Center
             )
             Text(
-                text = "Check back later for short videos from the Nostr network",
+                text = "Be the first to post a 6-second video!",
                 color = Color.White.copy(alpha = 0.7f),
                 style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(onClick = onNavigateToRecord) {
+                Icon(Icons.Default.Videocam, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Record Video")
+            }
+        }
+
+        FloatingActionButton(
+            onClick = onNavigateToRecord,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp)
+                .padding(bottom = 80.dp),
+            containerColor = MaterialTheme.colorScheme.primary
+        ) {
+            Icon(
+                imageVector = Icons.Default.Videocam,
+                contentDescription = "Record video"
             )
         }
     }
 }
 
 @Composable
-private fun ErrorState(error: String) {
+private fun ErrorState(error: String, onNavigateToRecord: () -> Unit = {}) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black),
-        contentAlignment = Alignment.Center
+            .background(Color.Black)
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier.padding(32.dp)
+            modifier = Modifier
+                .align(Alignment.Center)
+                .padding(32.dp)
         ) {
             Icon(
                 imageVector = Icons.Default.ErrorOutline,
@@ -345,6 +341,20 @@ private fun ErrorState(error: String) {
                 color = MaterialTheme.colorScheme.error.copy(alpha = 0.9f),
                 style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.Center
+            )
+        }
+
+        FloatingActionButton(
+            onClick = onNavigateToRecord,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp)
+                .padding(bottom = 80.dp),
+            containerColor = MaterialTheme.colorScheme.primary
+        ) {
+            Icon(
+                imageVector = Icons.Default.Videocam,
+                contentDescription = "Record video"
             )
         }
     }

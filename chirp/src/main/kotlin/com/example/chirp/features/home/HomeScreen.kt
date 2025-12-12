@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil3.compose.AsyncImage
 import com.example.chirp.features.home.components.NoteCard
+import com.example.chirp.ui.theme.Spacing
 import io.nostr.ndk.relay.NDKRelay
 import io.nostr.ndk.relay.nip11.Nip11RelayInformation
 
@@ -39,15 +40,23 @@ fun HomeScreen(
     val relayFilterState by viewModel.relayFilterState.collectAsState()
     val connectedRelays by viewModel.ndk.pool.connectedRelays.collectAsState()
     var showRelayDropdown by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(state.error) {
+        state.error?.let { error ->
+            snackbarHostState.showSnackbar(error)
+        }
+    }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
                     Box {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                             modifier = Modifier.clickable { showRelayDropdown = true }
                         ) {
                             when (val mode = relayFilterState.mode) {
@@ -170,24 +179,6 @@ fun HomeScreen(
                     }
                 }
 
-                if (state.isLoading && state.notes.isEmpty()) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
-            }
-
-            state.error?.let { error ->
-                Snackbar(
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    Text(error)
-                }
             }
         }
     }
