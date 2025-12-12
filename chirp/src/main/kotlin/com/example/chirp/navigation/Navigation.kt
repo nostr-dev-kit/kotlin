@@ -88,6 +88,9 @@ fun ChirpNavigation(
                 },
                 onNavigateToSearch = { hashtag ->
                     navController.navigate(Routes.Search.createRoute(hashtag))
+                },
+                onNavigateToCompose = { replyTo ->
+                    navController.navigate(Routes.Compose.createRoute(replyTo))
                 }
             )
         }
@@ -131,6 +134,9 @@ fun ChirpNavigation(
                 },
                 onNavigateToSearch = { hashtag ->
                     navController.navigate(Routes.Search.createRoute(hashtag))
+                },
+                onNavigateToCompose = { replyTo ->
+                    navController.navigate(Routes.Compose.createRoute(replyTo))
                 }
             )
         }

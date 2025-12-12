@@ -73,6 +73,26 @@ UserInfo(
 )
 ```
 
+### Reaction Components
+
+```kotlin
+import io.nostr.ndk.compose.reactions.*
+
+// Like/reaction button - automatically handles publishing reactions
+ReactionButton(
+    ndk = ndk,
+    event = note,
+    emoji = "+",  // default like
+    showCount = true
+)
+
+// Reply button - navigates to compose
+ReplyButton(
+    event = note,
+    onReply = { eventId -> navigateToCompose(eventId) }
+)
+```
+
 ## Renderer Variants
 
 ### Event Mentions
@@ -200,6 +220,13 @@ ndk-compose/
 │   ├── UserDisplayName.kt    - Display name component
 │   ├── UserAvatar.kt          - Avatar image component
 │   └── UserInfo.kt            - Combined avatar + name
+├── reactions/
+│   ├── ReactionButton.kt      - Like/reaction button with auto-publish
+│   └── ReplyButton.kt         - Reply navigation button
+├── relay/
+│   ├── RelayIcon.kt           - Relay icon from NIP-11
+│   ├── RelayName.kt           - Relay name display
+│   └── ...                    - Other relay components
 └── content/
     ├── RenderedContent.kt     - Main orchestrator
     ├── ContentCallbacks.kt    - Click handlers

@@ -22,7 +22,8 @@ fun ThreadScreen(
     onNavigateBack: () -> Unit = {},
     onNavigateToProfile: (String) -> Unit = {},
     onNavigateToThread: (String) -> Unit = {},
-    onNavigateToSearch: (String?) -> Unit = {}
+    onNavigateToSearch: (String?) -> Unit = {},
+    onNavigateToCompose: (String?) -> Unit = {}
 ) {
     val state by viewModel.state.collectAsState()
 
@@ -68,8 +69,7 @@ fun ThreadScreen(
                             NoteCard(
                                 note = state.mainEvent!!,
                                 ndk = viewModel.ndk,
-                                onReply = { },
-                                onReact = { _, _ -> },
+                                onReply = { eventId -> onNavigateToCompose(eventId) },
                                 onNoteClick = { },
                                 onProfileClick = onNavigateToProfile,
                                 onHashtagClick = { tag -> onNavigateToSearch(tag) }
@@ -95,9 +95,8 @@ fun ThreadScreen(
                             NoteCard(
                                 note = reply,
                                 ndk = viewModel.ndk,
-                                onReply = { },
-                                onReact = { _, _ -> },
-                                onNoteClick = { },
+                                onReply = { eventId -> onNavigateToCompose(eventId) },
+                                onNoteClick = { eventId -> onNavigateToThread(eventId) },
                                 onProfileClick = onNavigateToProfile,
                                 onHashtagClick = { tag -> onNavigateToSearch(tag) }
                             )

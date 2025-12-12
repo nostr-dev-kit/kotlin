@@ -22,7 +22,8 @@ fun SearchScreen(
     onNavigateBack: () -> Unit = {},
     onNavigateToThread: (String) -> Unit = {},
     onNavigateToProfile: (String) -> Unit = {},
-    onNavigateToSearch: (String?) -> Unit = {}
+    onNavigateToSearch: (String?) -> Unit = {},
+    onNavigateToCompose: (String?) -> Unit = {}
 ) {
     val state by viewModel.state.collectAsState()
 
@@ -115,8 +116,7 @@ fun SearchScreen(
                             NoteCard(
                                 note = note,
                                 ndk = viewModel.ndk,
-                                onReply = { },
-                                onReact = { _, _ -> },
+                                onReply = { eventId -> onNavigateToCompose(eventId) },
                                 onNoteClick = { eventId -> onNavigateToThread(eventId) },
                                 onProfileClick = onNavigateToProfile,
                                 onHashtagClick = { tag -> onNavigateToSearch(tag) }

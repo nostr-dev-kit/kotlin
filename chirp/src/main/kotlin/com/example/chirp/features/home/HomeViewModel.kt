@@ -34,7 +34,6 @@ class HomeViewModel @Inject constructor(
         when (intent) {
             HomeIntent.LoadFeed -> loadFeed()
             HomeIntent.RefreshFeed -> refreshFeed()
-            is HomeIntent.ReactToNote -> reactToNote(intent.eventId, intent.emoji)
         }
     }
 
@@ -85,12 +84,6 @@ class HomeViewModel @Inject constructor(
     private fun refreshFeed() {
         _state.update { it.copy(notes = emptyList()) }
         loadFeed()
-    }
-
-    private fun reactToNote(eventId: String, emoji: String) {
-        viewModelScope.launch {
-            _state.update { it.copy(error = "Reactions not yet implemented") }
-        }
     }
 
     override fun onCleared() {

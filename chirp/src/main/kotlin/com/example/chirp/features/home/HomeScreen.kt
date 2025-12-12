@@ -10,7 +10,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Cloud
-import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -116,9 +115,6 @@ fun HomeScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { /* TODO: Notifications */ }) {
-                        Icon(Icons.Default.Notifications, "Notifications")
-                    }
                     IconButton(onClick = onNavigateToSettings) {
                         Icon(Icons.Default.Settings, "Settings")
                     }
@@ -168,9 +164,6 @@ fun HomeScreen(
                                 note = note,
                                 ndk = viewModel.ndk,
                                 onReply = { onNavigateToCompose(it) },
-                                onReact = { eventId, emoji ->
-                                    viewModel.onIntent(HomeIntent.ReactToNote(eventId, emoji))
-                                },
                                 onNoteClick = onNavigateToThread,
                                 onProfileClick = onNavigateToProfile,
                                 onHashtagClick = { tag -> onNavigateToSearch(tag) }
