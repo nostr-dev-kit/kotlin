@@ -25,33 +25,40 @@ import java.util.concurrent.ConcurrentHashMap
  * This signer delegates signing operations to a remote signer application
  * over the Nostr network using encrypted kind 24133 events.
  *
- * Supports two initialization methods:
+ * Supports three initialization methods:
  *
- * 1. Direct initialization with pubkey and relays:
+ * 1. Direct initialization with pubkey and relays (signer-initiated):
  * ```kotlin
  * val remoteSigner = NDKRemoteSigner(
  *     ndk = ndk,
  *     remotePubkey = "remote_signer_pubkey_hex",
  *     relayUrls = listOf("wss://relay.nsec.app")
  * )
+ * remoteSigner.connect()
  * ```
  *
- * 2. From bunker:// URL:
+ * 2. From bunker:// URL (signer-initiated):
  * ```kotlin
  * val remoteSigner = NDKRemoteSigner.fromBunkerUrl(
  *     ndk = ndk,
  *     bunkerUrl = "bunker://pubkey?relay=wss://relay.example.com&secret=optional"
  * )
+ * remoteSigner.connect()
  * ```
  *
- * After initialization, call connect() to establish the connection:
+ * 3. Client-initiated with nostrconnect:// URI:
  * ```kotlin
- * remoteSigner.connect()
- * val event = remoteSigner.sign(unsignedEvent)
+ * val (signer, connectUrl) = NDKRemoteSigner.awaitConnection(
+ *     ndk = ndk,
+ *     relayUrls = listOf("wss://relay.example.com"),
+ *     appName = "MyApp"
+ * )
+ * // Display connectUrl.toUri() as QR code or deeplink
+ * signer.connect() // Blocks until remote signer connects
  * ```
  *
  * @property ndk The NDK instance for relay communication
- * @property remotePubkey The remote signer's public key
+ * @property remotePubkey The remote signer's public key (null for client-initiated until connected)
  * @property relayUrls List of relay URLs to use for communication
  * @property localKeyPair Local keypair for encrypting requests (generated if not provided)
  * @property secret Optional secret for authentication with the remote signer
@@ -59,15 +66,16 @@ import java.util.concurrent.ConcurrentHashMap
  */
 class NDKRemoteSigner private constructor(
     private val ndk: NDK,
-    private val remotePubkey: PublicKey,
+    private var remotePubkey: PublicKey?,
     private val relayUrls: List<String>,
     private val localKeyPair: NDKKeyPair,
     private val secret: String?,
-    private val timeoutMs: Long
+    private val timeoutMs: Long,
+    private val isClientInitiated: Boolean = false
 ) : NDKSigner {
 
     /**
-     * Primary constructor for direct initialization.
+     * Primary constructor for direct initialization (signer-initiated).
      */
     constructor(
         ndk: NDK,
@@ -75,7 +83,7 @@ class NDKRemoteSigner private constructor(
         relayUrls: List<String>,
         localKeyPair: NDKKeyPair = NDKKeyPair.generate(),
         timeoutMs: Long = 30000L
-    ) : this(ndk, remotePubkey, relayUrls, localKeyPair, null, timeoutMs)
+    ) : this(ndk, remotePubkey, relayUrls, localKeyPair, null, timeoutMs, false)
 
     companion object {
         private const val KIND_NOSTR_CONNECT = 24133
@@ -140,14 +148,79 @@ class NDKRemoteSigner private constructor(
                 relayUrls = parsed.relays,
                 localKeyPair = localKeyPair,
                 secret = parsed.secret,
-                timeoutMs = timeoutMs
+                timeoutMs = timeoutMs,
+                isClientInitiated = false
             )
+        }
+
+        /**
+         * Creates a client-initiated connection setup.
+         *
+         * Returns a signer and a NostrConnectUrl that should be displayed to the user
+         * (as a QR code or deeplink). When the remote signer scans/opens the URL,
+         * they will connect to this client.
+         *
+         * Usage:
+         * ```kotlin
+         * val (signer, connectUrl) = NDKRemoteSigner.awaitConnection(
+         *     ndk = ndk,
+         *     relayUrls = listOf("wss://relay.example.com"),
+         *     appName = "MyApp"
+         * )
+         * // Display connectUrl.toUri() as QR code
+         * // Or launch as deeplink: Intent(Intent.ACTION_VIEW, Uri.parse(connectUrl.toUri()))
+         * signer.connect() // This will wait for the remote signer to connect
+         * ```
+         *
+         * @param ndk The NDK instance for relay communication
+         * @param relayUrls Relay URLs where this client listens for the connection
+         * @param appName Optional name of this application
+         * @param appUrl Optional URL of this application
+         * @param appImage Optional icon URL of this application
+         * @param permissions Optional list of permissions to request
+         * @param timeoutMs Timeout for waiting for connection (default: 60000ms)
+         * @return Pair of NDKRemoteSigner and NostrConnectUrl
+         */
+        fun awaitConnection(
+            ndk: NDK,
+            relayUrls: List<String>,
+            appName: String? = null,
+            appUrl: String? = null,
+            appImage: String? = null,
+            permissions: List<String>? = null,
+            timeoutMs: Long = 60000L
+        ): Pair<NDKRemoteSigner, NostrConnectUrl> {
+            val localKeyPair = NDKKeyPair.generate()
+            val secret = NostrConnectUrl.generateSecret()
+
+            val connectUrl = NostrConnectUrl(
+                clientPubkey = localKeyPair.pubkeyHex,
+                relays = relayUrls,
+                secret = secret,
+                permissions = permissions,
+                name = appName,
+                url = appUrl,
+                image = appImage
+            )
+
+            val signer = NDKRemoteSigner(
+                ndk = ndk,
+                remotePubkey = null,
+                relayUrls = relayUrls,
+                localKeyPair = localKeyPair,
+                secret = secret,
+                timeoutMs = timeoutMs,
+                isClientInitiated = true
+            )
+
+            return signer to connectUrl
         }
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val pendingRequests = ConcurrentHashMap<String, CompletableDeferred<NIP46Response>>()
     private var responseSubscription: io.nostr.ndk.subscription.NDKSubscription? = null
+    private var pendingConnectionResponse: CompletableDeferred<Pair<PublicKey, NIP46Response>>? = null
 
     private var _pubkey: PublicKey? = null
     override val pubkey: PublicKey
@@ -158,10 +231,18 @@ class NDKRemoteSigner private constructor(
     /**
      * Establishes connection with the remote signer and retrieves its public key.
      *
-     * This method:
+     * For signer-initiated (bunker://) connections:
      * 1. Ensures relays are connected
      * 2. Subscribes to response events from the remote signer
-     * 3. Sends a connect request if secret is provided, or get_public_key otherwise
+     * 3. Sends a connect request if secret is provided
+     * 4. Requests the user's public key
+     *
+     * For client-initiated (nostrconnect://) connections:
+     * 1. Ensures relays are connected
+     * 2. Subscribes to incoming events tagged with our pubkey
+     * 3. Waits for a connect response from any remote signer
+     * 4. Validates the secret and extracts the remote signer pubkey
+     * 5. Requests the user's public key
      *
      * @throws IllegalStateException if connection fails or times out
      */
@@ -169,12 +250,19 @@ class NDKRemoteSigner private constructor(
         if (isConnected) return
 
         ensureRelaysConnected()
-        subscribeToResponses()
 
-        // If we have a secret, send connect request first
-        if (secret != null) {
-            val connectParams = listOf(remotePubkey, secret)
-            sendRequest("connect", connectParams)
+        if (isClientInitiated) {
+            // Client-initiated: wait for incoming connection
+            awaitIncomingConnection()
+        } else {
+            // Signer-initiated: we already know the remote pubkey
+            subscribeToResponses()
+
+            // If we have a secret, send connect request first
+            val signerPubkey = remotePubkey
+            if (secret != null && signerPubkey != null) {
+                sendRequest("connect", listOf(signerPubkey, secret))
+            }
         }
 
         // Get the actual user's public key
@@ -183,6 +271,79 @@ class NDKRemoteSigner private constructor(
             ?: throw IllegalStateException("Failed to get public key from remote signer")
 
         isConnected = true
+    }
+
+    /**
+     * Waits for an incoming connection from a remote signer (client-initiated flow).
+     * Subscribes to all kind 24133 events tagged with our pubkey and waits for
+     * a connect response with a valid secret.
+     */
+    private suspend fun awaitIncomingConnection() {
+        val filter = NDKFilter(
+            kinds = setOf(KIND_NOSTR_CONNECT),
+            tags = mapOf("p" to setOf(localKeyPair.pubkeyHex))
+        )
+
+        val subscription = ndk.subscribe(filter)
+        responseSubscription = subscription
+
+        val deferred = CompletableDeferred<Pair<PublicKey, NIP46Response>>()
+        pendingConnectionResponse = deferred
+
+        scope.launch {
+            subscription.events
+                .filter { it.kind == KIND_NOSTR_CONNECT }
+                .collect { event ->
+                    handleIncomingConnectionEvent(event)
+                }
+        }
+
+        try {
+            withTimeout(timeoutMs) {
+                val (signerPubkey, response) = deferred.await()
+
+                // Validate secret
+                val responseSecret = (response.result as? String)
+                if (secret != null && responseSecret != secret) {
+                    throw IllegalStateException("Invalid secret in connect response")
+                }
+
+                // Set the remote pubkey now that we know it
+                remotePubkey = signerPubkey
+
+                // Re-subscribe with author filter for better performance
+                responseSubscription?.stop()
+                subscribeToResponses()
+            }
+        } finally {
+            pendingConnectionResponse = null
+        }
+    }
+
+    /**
+     * Handles incoming events during client-initiated connection setup.
+     * Looks for connect responses and validates the secret.
+     */
+    private fun handleIncomingConnectionEvent(event: NDKEvent) {
+        try {
+            val privateKey = localKeyPair.privateKey
+                ?: throw IllegalStateException("Local keypair missing private key")
+
+            val decryptedJson = Nip44.decrypt(
+                encryptedPayload = event.content,
+                recipientPrivateKey = privateKey,
+                senderPublicKey = event.pubkey
+            )
+
+            val response = objectMapper.readValue<NIP46Response>(decryptedJson)
+
+            // Check if this is a connect response
+            if (response.id == "connect" || response.result != null) {
+                pendingConnectionResponse?.complete(event.pubkey to response)
+            }
+        } catch (e: Exception) {
+            // Ignore malformed responses
+        }
     }
 
     override fun serialize(): ByteArray {
@@ -341,6 +502,9 @@ class NDKRemoteSigner private constructor(
      * @throws IllegalStateException if response contains an error
      */
     private suspend fun sendRequest(method: String, params: List<Any>): NIP46Response {
+        val signerPubkey = remotePubkey
+            ?: throw IllegalStateException("Remote pubkey not set. Cannot send request.")
+
         val requestId = generateRequestId()
         val request = NIP46Request(id = requestId, method = method, params = params)
 
@@ -353,7 +517,7 @@ class NDKRemoteSigner private constructor(
                 plaintext = requestJson,
                 senderPrivateKey = localKeyPair.privateKey
                     ?: throw IllegalStateException("Local keypair missing private key"),
-                recipientPublicKey = remotePubkey
+                recipientPublicKey = signerPubkey
             )
 
             val requestEvent = NDKPrivateKeySigner(localKeyPair).sign(
@@ -361,7 +525,7 @@ class NDKRemoteSigner private constructor(
                     pubkey = localKeyPair.pubkeyHex,
                     createdAt = System.currentTimeMillis() / 1000,
                     kind = KIND_NOSTR_CONNECT,
-                    tags = listOf(NDKTag("p", listOf(remotePubkey))),
+                    tags = listOf(NDKTag("p", listOf(signerPubkey))),
                     content = encryptedContent
                 )
             )
@@ -384,9 +548,12 @@ class NDKRemoteSigner private constructor(
      * Subscribes to kind 24133 events from the remote signer.
      */
     private fun subscribeToResponses() {
+        val signerPubkey = remotePubkey
+            ?: throw IllegalStateException("Remote pubkey not set. Cannot subscribe to responses.")
+
         val filter = NDKFilter(
             kinds = setOf(KIND_NOSTR_CONNECT),
-            authors = setOf(remotePubkey),
+            authors = setOf(signerPubkey),
             tags = mapOf("p" to setOf(localKeyPair.pubkeyHex))
         )
 
@@ -407,13 +574,14 @@ class NDKRemoteSigner private constructor(
      */
     private fun handleResponseEvent(event: NDKEvent) {
         try {
+            val signerPubkey = remotePubkey ?: return
             val privateKey = localKeyPair.privateKey
                 ?: throw IllegalStateException("Local keypair missing private key")
 
             val decryptedJson = Nip44.decrypt(
                 encryptedPayload = event.content,
                 recipientPrivateKey = privateKey,
-                senderPublicKey = remotePubkey
+                senderPublicKey = signerPubkey
             )
 
             val response = objectMapper.readValue<NIP46Response>(decryptedJson)

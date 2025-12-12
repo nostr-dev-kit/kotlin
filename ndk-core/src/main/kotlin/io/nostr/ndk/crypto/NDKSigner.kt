@@ -44,6 +44,31 @@ interface NDKSigner {
         private val deserializers = mutableMapOf<String, (Map<String, Any?>) -> NDKSigner?>()
 
         /**
+         * Whether core deserializers have been initialized.
+         */
+        @Volatile
+        private var coreDeserializersInitialized = false
+
+        /**
+         * Ensures core signer deserializers are registered.
+         * This forces class loading of signer implementations, which triggers
+         * their companion object init blocks to register deserializers.
+         *
+         * Called automatically by [deserialize], but can be called manually
+         * to ensure early initialization.
+         */
+        fun ensureDeserializersInitialized() {
+            if (coreDeserializersInitialized) return
+            synchronized(this) {
+                if (coreDeserializersInitialized) return
+                // Force class loading - companion object init blocks register deserializers
+                NDKPrivateKeySigner::class
+                NDKRemoteSigner::class
+                coreDeserializersInitialized = true
+            }
+        }
+
+        /**
          * Registers a deserializer for a signer type.
          */
         fun registerDeserializer(type: String, deserializer: (Map<String, Any?>) -> NDKSigner?) {
@@ -57,6 +82,7 @@ interface NDKSigner {
          * @return The deserialized signer, or null if deserialization fails
          */
         fun deserialize(data: ByteArray): NDKSigner? {
+            ensureDeserializersInitialized()
             return try {
                 val json: Map<String, Any?> = objectMapper.readValue(data)
                 val type = json["type"] as? String ?: return null

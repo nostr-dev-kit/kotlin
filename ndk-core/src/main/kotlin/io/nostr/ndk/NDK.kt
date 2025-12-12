@@ -11,6 +11,7 @@ import io.nostr.ndk.outbox.NDKRelaySetCalculator
 import io.nostr.ndk.outbox.OutboxMetrics
 import io.nostr.ndk.outbox.OutboxMetricsEvent
 import io.nostr.ndk.relay.NDKPool
+import io.nostr.ndk.relay.NDKRelay
 import io.nostr.ndk.subscription.NDKSubscription
 import io.nostr.ndk.subscription.NDKSubscriptionManager
 import kotlinx.coroutines.CoroutineScope
@@ -358,6 +359,31 @@ class NDK(
      */
     fun subscribe(filter: NDKFilter): NDKSubscription {
         return subscribe(listOf(filter))
+    }
+
+    /**
+     * Creates a subscription with a single filter on specific relays.
+     *
+     * @param filter The filter to match events against
+     * @param relays The relays to subscribe on
+     * @return A new subscription that will emit matching events
+     */
+    fun subscribe(filter: NDKFilter, relays: Set<NDKRelay>): NDKSubscription {
+        return subscribe(listOf(filter), relays)
+    }
+
+    /**
+     * Creates a subscription with multiple filters on specific relays.
+     *
+     * @param filters List of filters to match events against
+     * @param relays The relays to subscribe on
+     * @return A new subscription that will emit matching events
+     */
+    fun subscribe(filters: List<NDKFilter>, relays: Set<NDKRelay>): NDKSubscription {
+        val subscription = subscriptionManager.subscribe(filters)
+        subscription.loadFromCache()
+        subscription.start(relays)
+        return subscription
     }
 
     /**
