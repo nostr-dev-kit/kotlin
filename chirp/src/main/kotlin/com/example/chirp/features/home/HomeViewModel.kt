@@ -2,11 +2,9 @@ package com.example.chirp.features.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.chirp.data.RelaySetRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.nostr.ndk.NDK
 import io.nostr.ndk.models.NDKFilter
-import io.nostr.ndk.relay.NDKRelay
 import io.nostr.ndk.subscription.NDKSubscription
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -17,8 +15,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
-    val ndk: NDK,
-    private val relaySetRepository: RelaySetRepository
+    val ndk: NDK
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(HomeState())
@@ -31,30 +28,6 @@ class HomeViewModel @Inject constructor(
 
     init {
         loadFeed()
-        loadRelaySets()
-    }
-
-    private fun loadRelaySets() {
-        viewModelScope.launch {
-            // Get user's own relay sets
-            ndk.currentUser.value?.pubkey?.let { userPubkey ->
-                relaySetRepository.fetchOwnRelaySets(userPubkey).collect { ownSets ->
-                    // Get relay sets from follows
-                    val follows = ndk.currentUser.value?.contacts()?.map { it.pubkey } ?: emptyList()
-                    if (follows.isNotEmpty()) {
-                        relaySetRepository.fetchRelaySetsFromFollows(follows).collect { followSets ->
-                            _relayFilterState.update {
-                                it.copy(availableRelaySets = ownSets + followSets)
-                            }
-                        }
-                    } else {
-                        _relayFilterState.update {
-                            it.copy(availableRelaySets = ownSets)
-                        }
-                    }
-                }
-            }
-        }
     }
 
     fun onIntent(intent: HomeIntent) {
@@ -79,69 +52,34 @@ class HomeViewModel @Inject constructor(
                 subscription?.stop()
 
                 val filter = when (_state.value.selectedTab) {
-                    FeedTab.FOLLOWING -> {
-                        val contacts = ndk.currentUser.value?.contacts()?.map { it.pubkey }?.toSet() ?: emptySet()
-                        if (contacts.isEmpty()) {
-                            // If no contacts, show global feed
-                            NDKFilter(
-                                kinds = setOf(1),
-                                limit = 100
-                            )
-                        } else {
-                            NDKFilter(
-                                kinds = setOf(1),
-                                authors = contacts,
-                                limit = 100
-                            )
-                        }
-                    }
-                    FeedTab.GLOBAL -> NDKFilter(
+                    FeedTab.NOTES -> NDKFilter(
                         kinds = setOf(1),
                         limit = 100
                     )
-                    FeedTab.NOTIFICATIONS -> {
-                        val userPubkey = ndk.currentUser.value?.pubkey ?: ""
-                        NDKFilter(
-                            kinds = setOf(1),
-                            tags = mapOf("p" to setOf(userPubkey)),
-                            limit = 100
-                        )
-                    }
+                    FeedTab.IMAGES -> NDKFilter(
+                        kinds = setOf(20),
+                        limit = 100
+                    )
+                    FeedTab.VIDEOS -> NDKFilter(
+                        kinds = setOf(22),
+                        limit = 100
+                    )
                 }
 
                 // Create subscription based on relay filter mode
                 val relayFilterMode = _relayFilterState.value.mode
 
-                // When using a relay set filter, ensure those relays are in the pool
-                if (relayFilterMode is RelayFilterMode.RelaySetFilter) {
-                    relayFilterMode.relaySet.relays.forEach { url ->
-                        if (ndk.pool.getRelay(url) == null) {
-                            ndk.pool.addRelay(url, connect = true)
-                        }
-                    }
+                subscription = when (relayFilterMode) {
+                    is RelayFilterMode.AllRelays -> ndk.subscribe(filter)
+                    is RelayFilterMode.SingleRelay -> ndk.subscribe(filter, relays = setOf(relayFilterMode.relay))
                 }
 
-                subscription = ndk.subscribe(filter)
-
                 subscription?.events?.collect { event ->
-                    // Filter events by relay source if using relay set filter
-                    val shouldInclude = when (relayFilterMode) {
-                        is RelayFilterMode.AllRelays -> true
-                        is RelayFilterMode.RelaySetFilter -> {
-                            // Check if event came from any of the relay set's relays
-                            // Note: This requires the event to have relay metadata
-                            // For now, we'll include all events as NDK doesn't expose relay source
-                            true
-                        }
-                    }
-
-                    if (shouldInclude) {
-                        _state.update { state ->
-                            state.copy(
-                                notes = (state.notes + event).distinctBy { it.id }.sortedByDescending { it.createdAt },
-                                isLoading = false
-                            )
-                        }
+                    _state.update { state ->
+                        state.copy(
+                            notes = (state.notes + event).distinctBy { it.id }.sortedByDescending { it.createdAt },
+                            isLoading = false
+                        )
                     }
                 }
             } catch (e: Exception) {

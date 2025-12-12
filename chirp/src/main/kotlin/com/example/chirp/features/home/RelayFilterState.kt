@@ -1,6 +1,6 @@
 package com.example.chirp.features.home
 
-import io.nostr.ndk.nips.RelaySet
+import io.nostr.ndk.relay.NDKRelay
 
 /**
  * Represents the relay filter mode for content browsing.
@@ -12,15 +12,14 @@ sealed class RelayFilterMode {
     data object AllRelays : RelayFilterMode()
 
     /**
-     * Filter content by a specific relay set.
+     * Filter content to a single relay.
      */
-    data class RelaySetFilter(val relaySet: RelaySet) : RelayFilterMode()
+    data class SingleRelay(val relay: NDKRelay) : RelayFilterMode()
 }
 
 /**
  * State for relay filtering in the feed.
  */
 data class RelayFilterState(
-    val mode: RelayFilterMode = RelayFilterMode.AllRelays,
-    val availableRelaySets: List<RelaySet> = emptyList()
+    val mode: RelayFilterMode = RelayFilterMode.AllRelays
 )

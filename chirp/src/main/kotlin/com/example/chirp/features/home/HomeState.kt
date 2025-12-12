@@ -6,11 +6,11 @@ data class HomeState(
     val notes: List<NDKEvent> = emptyList(),
     val isLoading: Boolean = false,
     val error: String? = null,
-    val selectedTab: FeedTab = FeedTab.GLOBAL
+    val selectedTab: FeedTab = FeedTab.NOTES
 )
 
 enum class FeedTab {
-    FOLLOWING,
-    GLOBAL,
-    NOTIFICATIONS
+    NOTES,
+    IMAGES,
+    VIDEOS
 }

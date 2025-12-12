@@ -9,8 +9,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.chirp.ui.theme.ChirpColors
+import io.nostr.ndk.compose.user.UserAvatar
 import io.nostr.ndk.compose.user.UserDisplayName
 import io.nostr.ndk.compose.content.ContentCallbacks
 import io.nostr.ndk.compose.content.RenderedContent
@@ -27,73 +31,139 @@ fun NoteCard(
     onReact: (String, String) -> Unit,
     onNoteClick: (String) -> Unit,
     onProfileClick: (String) -> Unit,
+    onHashtagClick: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    Card(
+    Column(
         modifier = modifier
             .fillMaxWidth()
             .clickable { onNoteClick(note.id) }
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .padding(horizontal = 20.dp, vertical = 14.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
+        // Avatar + Name row
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            // Author info
+            UserAvatar(
+                pubkey = note.pubkey,
+                ndk = ndk,
+                size = 40.dp,
+                modifier = Modifier.clickable { onProfileClick(note.pubkey) }
+            )
+
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.weight(1f)
             ) {
                 UserDisplayName(
                     pubkey = note.pubkey,
                     ndk = ndk,
-                    style = MaterialTheme.typography.titleSmall,
+                    style = LocalTextStyle.current.copy(
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold
+                    ),
                     modifier = Modifier.clickable { onProfileClick(note.pubkey) }
                 )
 
                 Text(
+                    text = "·",
+                    style = LocalTextStyle.current.copy(
+                        fontSize = 13.sp,
+                        color = ChirpColors.TertiaryText
+                    )
+                )
+
+                Text(
                     text = formatTimestamp(note.createdAt),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    style = LocalTextStyle.current.copy(
+                        fontSize = 13.sp,
+                        color = ChirpColors.TertiaryText
+                    )
                 )
             }
+        }
 
-            Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
-            // Content with rich rendering
-            RenderedContent(
-                ndk = ndk,
-                event = note,
-                callbacks = ContentCallbacks(
-                    onUserClick = onProfileClick,
-                    onHashtagClick = { tag -> /* TODO: Navigate to hashtag feed */ },
-                    onLinkClick = { url -> /* TODO: Open browser */ },
-                    onMediaClick = { urls, index -> /* TODO: Open gallery */ }
-                ),
-                textStyle = MaterialTheme.typography.bodyMedium
+        // Content - full width
+        RenderedContent(
+            ndk = ndk,
+            event = note,
+            callbacks = ContentCallbacks(
+                onUserClick = onProfileClick,
+                onHashtagClick = onHashtagClick,
+                onLinkClick = { url -> },
+                onMediaClick = { urls, index -> }
+            ),
+            textStyle = LocalTextStyle.current.copy(
+                fontSize = 15.sp,
+                lineHeight = 22.5.sp
+            )
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Action buttons - full width
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            CompactActionButton(
+                icon = Icons.AutoMirrored.Filled.Reply,
+                count = null,
+                contentDescription = "Reply",
+                onClick = { onReply(note.id) }
             )
 
-            Spacer(modifier = Modifier.height(12.dp))
+            CompactActionButton(
+                icon = Icons.Default.FavoriteBorder,
+                count = null,
+                contentDescription = "Like",
+                onClick = { onReact(note.id, "+") }
+            )
+        }
+    }
 
-            // Actions
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                IconButton(onClick = { onReply(note.id) }) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Reply,
-                        contentDescription = "Reply"
-                    )
-                }
+    // Bottom border
+    HorizontalDivider(
+        thickness = 1.dp,
+        color = ChirpColors.Border
+    )
+}
 
-                IconButton(onClick = { onReact(note.id, "+") }) {
-                    Icon(
-                        imageVector = Icons.Default.FavoriteBorder,
-                        contentDescription = "Like"
-                    )
-                }
-            }
+@Composable
+private fun CompactActionButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    count: Int?,
+    contentDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .clip(MaterialTheme.shapes.small)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            modifier = Modifier.size(18.dp),
+            tint = ChirpColors.TertiaryText
+        )
+
+        count?.let {
+            Text(
+                text = it.toString(),
+                style = LocalTextStyle.current.copy(
+                    fontSize = 13.sp,
+                    color = ChirpColors.TertiaryText
+                )
+            )
         }
     }
 }
