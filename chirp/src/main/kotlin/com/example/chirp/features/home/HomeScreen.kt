@@ -129,45 +129,6 @@ fun HomeScreen(
             ) {
                 Icon(Icons.Default.Add, "Compose")
             }
-        },
-        bottomBar = {
-            NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surface
-            ) {
-                NavigationBarItem(
-                    selected = state.selectedTab == FeedTab.NOTES,
-                    onClick = { viewModel.onIntent(HomeIntent.SwitchTab(FeedTab.NOTES)) },
-                    icon = {
-                        Icon(
-                            imageVector = Icons.Default.Cloud,
-                            contentDescription = "Notes"
-                        )
-                    },
-                    label = { Text("Notes") }
-                )
-                NavigationBarItem(
-                    selected = state.selectedTab == FeedTab.IMAGES,
-                    onClick = { viewModel.onIntent(HomeIntent.SwitchTab(FeedTab.IMAGES)) },
-                    icon = {
-                        Icon(
-                            imageVector = Icons.Default.Cloud,
-                            contentDescription = "Images"
-                        )
-                    },
-                    label = { Text("Images") }
-                )
-                NavigationBarItem(
-                    selected = state.selectedTab == FeedTab.VIDEOS,
-                    onClick = { viewModel.onIntent(HomeIntent.SwitchTab(FeedTab.VIDEOS)) },
-                    icon = {
-                        Icon(
-                            imageVector = Icons.Default.Cloud,
-                            contentDescription = "Videos"
-                        )
-                    },
-                    label = { Text("Videos") }
-                )
-            }
         }
     ) { padding ->
         Column(

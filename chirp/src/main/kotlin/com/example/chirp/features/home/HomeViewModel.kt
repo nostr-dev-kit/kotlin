@@ -34,7 +34,6 @@ class HomeViewModel @Inject constructor(
         when (intent) {
             HomeIntent.LoadFeed -> loadFeed()
             HomeIntent.RefreshFeed -> refreshFeed()
-            is HomeIntent.SwitchTab -> switchTab(intent.tab)
             is HomeIntent.ReactToNote -> reactToNote(intent.eventId, intent.emoji)
         }
     }
@@ -51,20 +50,10 @@ class HomeViewModel @Inject constructor(
             try {
                 subscription?.stop()
 
-                val filter = when (_state.value.selectedTab) {
-                    FeedTab.NOTES -> NDKFilter(
-                        kinds = setOf(1),
-                        limit = 100
-                    )
-                    FeedTab.IMAGES -> NDKFilter(
-                        kinds = setOf(20),
-                        limit = 100
-                    )
-                    FeedTab.VIDEOS -> NDKFilter(
-                        kinds = setOf(22),
-                        limit = 100
-                    )
-                }
+                val filter = NDKFilter(
+                    kinds = setOf(1),
+                    limit = 100
+                )
 
                 // Create subscription based on relay filter mode
                 val relayFilterMode = _relayFilterState.value.mode
@@ -98,13 +87,7 @@ class HomeViewModel @Inject constructor(
         loadFeed()
     }
 
-    private fun switchTab(tab: FeedTab) {
-        _state.update { it.copy(selectedTab = tab, notes = emptyList()) }
-        loadFeed()
-    }
-
     private fun reactToNote(eventId: String, emoji: String) {
-        // TODO: Implement reaction publishing once we understand the NDK publish API better
         viewModelScope.launch {
             _state.update { it.copy(error = "Reactions not yet implemented") }
         }
