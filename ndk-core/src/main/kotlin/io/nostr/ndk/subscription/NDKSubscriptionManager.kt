@@ -60,7 +60,7 @@ internal class NDKSubscriptionManager(
 
     // LRU-like cache for event deduplication
     // Maps event deduplication key to timestamp when first seen
-    private val seenEvents = LRUCache<String, Timestamp>(maxSize = 10_000)
+    private val seenEvents = java.util.Collections.synchronizedMap(LRUCache<String, Timestamp>(maxSize = 10_000))
 
     /**
      * Creates a new subscription with the given filters.
@@ -122,13 +122,14 @@ internal class NDKSubscriptionManager(
     internal fun dispatchEvent(event: NDKEvent, relay: NDKRelay, subscriptionId: String) {
         // Deduplication check
         val dedupKey = event.deduplicationKey()
-        if (seenEvents.contains(dedupKey)) {
-            // Already seen this event, ignore
-            return
+        synchronized(seenEvents) {
+            if (seenEvents.containsKey(dedupKey)) {
+                // Already seen this event, ignore
+                return
+            }
+            // Mark as seen
+            seenEvents.put(dedupKey, System.currentTimeMillis() / 1000)
         }
-
-        // Mark as seen
-        seenEvents.put(dedupKey, System.currentTimeMillis() / 1000)
 
         // Store in cache (non-blocking, fire and forget)
         ndk.cacheAdapter?.let { cache ->
@@ -192,5 +193,4 @@ private class LRUCache<K, V>(private val maxSize: Int) : LinkedHashMap<K, V>(
         return size > maxSize
     }
 
-    fun contains(key: K): Boolean = containsKey(key)
 }

@@ -40,7 +40,8 @@ private const val TAG = "NDKRelay"
  */
 class NDKRelay(
     val url: String,
-    private val ndk: NDK?
+    private val ndk: NDK?,
+    private val okHttpClient: OkHttpClient
 ) {
     private val _state = MutableStateFlow(NDKRelayState.DISCONNECTED)
 
@@ -93,12 +94,6 @@ class NDKRelay(
 
     // Track active subscriptions for restoration after reconnect
     private val activeSubscriptions = ConcurrentHashMap<String, List<NDKFilter>>()
-
-    private val okHttpClient = OkHttpClient.Builder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .writeTimeout(30, TimeUnit.SECONDS)
-        .build()
 
     private var webSocket: NDKWebSocket? = null
 

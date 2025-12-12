@@ -247,6 +247,13 @@ class NDKTest {
         val filter = NDKFilter(kinds = setOf(1), limit = 10)
         val subscription = ndk.subscribe(filter)
 
+        // Wait for async relay calculation
+        withTimeout(3000) {
+            while (subscription.activeRelays.value.size < 2) {
+                delay(10)
+            }
+        }
+
         // Should use all available relays
         assertEquals(2, subscription.activeRelays.value.size)
     }
@@ -267,6 +274,13 @@ class NDKTest {
         // Subscribe with authors filter - initially no relay list cached
         val filter = NDKFilter(authors = setOf("alice"), kinds = setOf(1))
         val subscription = ndk.subscribe(filter)
+
+        // Wait for async relay calculation
+        withTimeout(3000) {
+            while (subscription.activeRelays.value.isEmpty()) {
+                delay(10)
+            }
+        }
 
         // Initially uses available relays since no relay list cached
         assertEquals(1, subscription.activeRelays.value.size)
@@ -300,7 +314,7 @@ class NDKTest {
     }
 
     @Test
-    fun `subscription stops tracking relays when stopped`() = runTest {
+    fun `subscription stops tracking relays when stopped`() = runBlocking {
         val cache = InMemoryCacheAdapter()
         val ndk = NDK(cacheAdapter = cache)
         ndk.enableOutboxModel = true
@@ -310,15 +324,25 @@ class NDKTest {
         val filter = NDKFilter(authors = setOf("bob"), kinds = setOf(1))
         val subscription = ndk.subscribe(filter)
 
+        // Wait for subscription to initialize (async relay calculation)
+        withTimeout(5000) {
+            while (subscription.activeRelays.value.isEmpty()) {
+                delay(10)
+            }
+        }
+
         // Stop the subscription
         subscription.stop()
 
+        // Active relays should be empty immediately after stop
+        assertTrue(subscription.activeRelays.value.isEmpty())
+
         // Now discover bob's relay list
-        val relayListEvent = createRelayListEvent(
+        val relayListEvent2 = createRelayListEvent(
             pubkey = "bob",
             tags = listOf(listOf("r", "wss://bob-relay.com", "write"))
         )
-        ndk.outboxTracker.trackRelayList(relayListEvent)
+        ndk.outboxTracker.trackRelayList(relayListEvent2)
 
         delay(100)
 

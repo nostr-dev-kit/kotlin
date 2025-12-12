@@ -53,7 +53,7 @@ class NDKPool(private val ndk: NDK) {
         val normalizedUrl = normalizeUrl(url)
 
         val relay = relays.getOrPut(normalizedUrl) {
-            val newRelay = NDKRelay(normalizedUrl, ndk)
+            val newRelay = NDKRelay(normalizedUrl, ndk, ndk.okHttpClient)
             startMonitoringRelay(newRelay)
             newRelay
         }

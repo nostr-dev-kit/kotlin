@@ -13,6 +13,7 @@ import io.nostr.ndk.outbox.OutboxMetricsEvent
 import io.nostr.ndk.relay.NDKPool
 import io.nostr.ndk.subscription.NDKSubscription
 import io.nostr.ndk.subscription.NDKSubscriptionManager
+import okhttp3.OkHttpClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -81,12 +82,14 @@ import kotlinx.coroutines.runBlocking
  * @param signer Optional signer for signing and publishing events (deprecated, use login())
  * @param cacheAdapter Optional cache adapter for event persistence (required for outbox model caching)
  * @param accountStorage Optional storage for persisting account data
+ * @param okHttpClient Optional OkHttpClient for network requests
  */
 class NDK(
     val explicitRelayUrls: Set<String> = emptySet(),
     val signer: NDKSigner? = null,
     val cacheAdapter: NDKCacheAdapter? = null,
-    val accountStorage: NDKAccountStorage? = null
+    val accountStorage: NDKAccountStorage? = null,
+    val okHttpClient: OkHttpClient = OkHttpClient.Builder().build()
 ) {
     /**
      * Whether to use the outbox model for relay selection.
@@ -379,28 +382,31 @@ class NDK(
         // Load cached events first (cache-first strategy)
         subscription.loadFromCache()
 
-        // Calculate optimal relays based on outbox model (uses runBlocking for cache lookup)
-        val relays = runBlocking {
-            relaySetCalculator.calculateRelaysForFilters(filters)
-        }
+        // Calculate optimal relays asynchronously
+        scope.launch {
+            val relays = try {
+                relaySetCalculator.calculateRelaysForFilters(filters)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                emptySet()
+            }
 
-        // Start subscription on calculated relays
-        subscription.start(relays)
+            // Start subscription on calculated relays
+            subscription.start(relays)
 
-        // Emit metrics event for relay calculation
-        if (enableOutboxModel) {
-            val authors = filters.flatMap { it.authors ?: emptySet() }.toSet()
-            if (authors.isNotEmpty()) {
-                val coveredAuthors = runBlocking {
-                    authors.count { outboxTracker.getRelayList(it) != null }
+            // Emit metrics event for relay calculation
+            if (enableOutboxModel) {
+                val authors = filters.flatMap { it.authors ?: emptySet() }.toSet()
+                if (authors.isNotEmpty()) {
+                    val coveredAuthors = authors.count { outboxTracker.getRelayList(it) != null }
+                    emitOutboxEvent(OutboxMetricsEvent.SubscriptionRelaysCalculated(
+                        subscriptionId = subscription.id,
+                        authorCount = authors.size,
+                        relayCount = relays.size,
+                        coveredAuthors = coveredAuthors,
+                        uncoveredAuthors = authors.size - coveredAuthors
+                    ))
                 }
-                emitOutboxEvent(OutboxMetricsEvent.SubscriptionRelaysCalculated(
-                    subscriptionId = subscription.id,
-                    authorCount = authors.size,
-                    relayCount = relays.size,
-                    coveredAuthors = coveredAuthors,
-                    uncoveredAuthors = authors.size - coveredAuthors
-                ))
             }
         }
 
