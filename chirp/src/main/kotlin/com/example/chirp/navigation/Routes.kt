@@ -13,7 +13,10 @@ sealed class Routes(val route: String) {
     data object Profile : Routes("profile/{pubkey}") {
         fun createRoute(pubkey: String): String = "profile/$pubkey"
     }
-    data object Search : Routes("search")
+    data object Search : Routes("search?hashtag={hashtag}") {
+        fun createRoute(hashtag: String? = null): String =
+            if (hashtag != null) "search?hashtag=$hashtag" else "search"
+    }
     data object Settings : Routes("settings")
     data object Debug : Routes("debug")
     data object ContentRendererSettings : Routes("settings/content_renderer")

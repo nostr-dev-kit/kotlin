@@ -79,6 +79,9 @@ fun ChirpNavigation(
                 },
                 onNavigateToThread = { eventId ->
                     navController.navigate(Routes.Thread.createRoute(eventId))
+                },
+                onNavigateToSearch = { hashtag ->
+                    navController.navigate(Routes.Search.createRoute(hashtag))
                 }
             )
         }
@@ -101,7 +104,15 @@ fun ChirpNavigation(
             )
         }
 
-        composable(Routes.Search.route) {
+        composable(
+            route = Routes.Search.route,
+            arguments = listOf(
+                navArgument("hashtag") {
+                    type = NavType.StringType
+                    nullable = true
+                }
+            )
+        ) {
             SearchScreen(
                 onNavigateBack = {
                     navController.popBackStack()
@@ -111,6 +122,9 @@ fun ChirpNavigation(
                 },
                 onNavigateToProfile = { pubkey ->
                     navController.navigate(Routes.Profile.createRoute(pubkey))
+                },
+                onNavigateToSearch = { hashtag ->
+                    navController.navigate(Routes.Search.createRoute(hashtag))
                 }
             )
         }
