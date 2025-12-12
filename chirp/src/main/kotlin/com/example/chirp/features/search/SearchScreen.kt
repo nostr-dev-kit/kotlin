@@ -20,7 +20,8 @@ fun SearchScreen(
     viewModel: SearchViewModel = hiltViewModel(),
     onNavigateBack: () -> Unit = {},
     onNavigateToThread: (String) -> Unit = {},
-    onNavigateToProfile: (String) -> Unit = {}
+    onNavigateToProfile: (String) -> Unit = {},
+    onNavigateToSearch: (String?) -> Unit = {}
 ) {
     val state by viewModel.state.collectAsState()
 
@@ -122,7 +123,8 @@ fun SearchScreen(
                                 onReply = { },
                                 onReact = { _, _ -> },
                                 onNoteClick = { eventId -> onNavigateToThread(eventId) },
-                                onProfileClick = onNavigateToProfile
+                                onProfileClick = onNavigateToProfile,
+                                onHashtagClick = { tag -> onNavigateToSearch(tag) }
                             )
                         }
                     }
