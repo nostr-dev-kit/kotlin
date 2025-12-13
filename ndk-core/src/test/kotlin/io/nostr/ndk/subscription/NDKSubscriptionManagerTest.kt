@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
+import okhttp3.OkHttpClient
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -22,12 +23,13 @@ class NDKSubscriptionManagerTest {
     private lateinit var ndk: NDK
     private lateinit var manager: NDKSubscriptionManager
     private lateinit var relay: NDKRelay
+    private val okHttpClient = OkHttpClient.Builder().build()
 
     @Before
     fun setup() {
         ndk = NDK()
         manager = NDKSubscriptionManager(ndk)
-        relay = NDKRelay("wss://test.relay", ndk)
+        relay = NDKRelay("wss://test.relay", ndk, okHttpClient)
     }
 
     @Test
