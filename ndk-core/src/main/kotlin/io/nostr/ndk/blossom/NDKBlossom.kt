@@ -9,7 +9,6 @@ import io.nostr.ndk.models.NDKTag
 import io.nostr.ndk.models.PublicKey
 import io.nostr.ndk.user.NDKUser
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -64,7 +63,8 @@ class NDKBlossom(
     suspend fun getServerList(user: NDKUser? = null): BlossomServerList? {
         cachedServerList?.let { return it }
 
-        val targetUser = user ?: ndk.signer?.let { NDKUser(it.pubkey, ndk) }
+        val effectiveSigner = signer ?: ndk.signer
+        val targetUser = user ?: effectiveSigner?.let { NDKUser(it.pubkey, ndk) }
             ?: throw BlossomError("No user available to fetch server list", BlossomErrorCode.NO_SIGNER)
 
         val filter = NDKFilter(
@@ -73,9 +73,8 @@ class NDKBlossom(
         )
 
         val subscription = ndk.subscribe(filter)
-        val event = subscription.events.first()
+        val event = subscription.fetchEvent() ?: return null
         cachedServerList = BlossomServerList.fromEvent(event)
-        subscription.stop()
         return cachedServerList
     }
 
@@ -104,7 +103,11 @@ class NDKBlossom(
 
         // Determine which server to use
         val serverUrl = options.server ?: run {
-            val serverList = getServerList()
+            val serverList = try {
+                getServerList()
+            } catch (e: BlossomError) {
+                null // Fall through to fallback
+            }
             serverList?.servers?.firstOrNull()
                 ?: options.fallbackServer
                 ?: throw BlossomError("No blossom servers configured", BlossomErrorCode.SERVER_LIST_EMPTY)

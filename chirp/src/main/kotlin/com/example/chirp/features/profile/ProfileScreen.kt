@@ -9,8 +9,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Reply
-import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -23,13 +21,12 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.chirp.ui.theme.AvatarSizes
 import com.example.chirp.ui.theme.CornerRadius
 import com.example.chirp.ui.theme.Spacing
+import com.example.chirp.util.formatRelativeTime
 import io.nostr.ndk.compose.content.ContentCallbacks
 import io.nostr.ndk.compose.content.RenderedContent
 import io.nostr.ndk.compose.user.UserAvatar
 import io.nostr.ndk.compose.user.UserDisplayName
 import io.nostr.ndk.models.NDKEvent
-import java.text.SimpleDateFormat
-import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -149,28 +146,6 @@ fun ProfileScreen(
                                     LinkPill(url = website)
                                 }
 
-                                // Action buttons
-                                Spacer(modifier = Modifier.height(Spacing.lg))
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Button(
-                                        onClick = { },
-                                        modifier = Modifier.weight(1f),
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.primary
-                                        )
-                                    ) {
-                                        Text("Follow")
-                                    }
-                                    OutlinedButton(
-                                        onClick = { },
-                                        modifier = Modifier.weight(1f)
-                                    ) {
-                                        Text("Edit Profile")
-                                    }
-                                }
                             }
                         }
 
@@ -390,7 +365,7 @@ private fun CompactNoteItem(
                     )
 
                     Text(
-                        text = formatTimestamp(note.createdAt),
+                        text = formatRelativeTime(note.createdAt),
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -410,34 +385,6 @@ private fun CompactNoteItem(
                         lineHeight = 20.sp
                     )
                 )
-
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.lg)
-                ) {
-                    IconButton(
-                        onClick = { },
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Reply,
-                            contentDescription = "Reply",
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
-                    IconButton(
-                        onClick = { },
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.FavoriteBorder,
-                            contentDescription = "Like",
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
             }
         }
     }
@@ -520,26 +467,11 @@ private fun ArticleCard(
                 }
 
                 Text(
-                    text = formatTimestamp(article.createdAt),
+                    text = formatRelativeTime(article.createdAt),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.tertiary
                 )
             }
-        }
-    }
-}
-
-private fun formatTimestamp(timestamp: Long): String {
-    val now = System.currentTimeMillis() / 1000
-    val diff = now - timestamp
-
-    return when {
-        diff < 60 -> "${diff}s"
-        diff < 3600 -> "${diff / 60}m"
-        diff < 86400 -> "${diff / 3600}h"
-        else -> {
-            val date = Date(timestamp * 1000)
-            SimpleDateFormat("MMM d", Locale.getDefault()).format(date)
         }
     }
 }

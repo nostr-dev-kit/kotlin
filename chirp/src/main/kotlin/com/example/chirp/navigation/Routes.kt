@@ -25,6 +25,7 @@ sealed class Routes(val route: String) {
     data object Subscriptions : Routes("developer_tools/subscriptions")
     data object ContentRendererSettings : Routes("settings/content_renderer")
     data object RelaySettings : Routes("settings/relays")
+    data object BlossomSettings : Routes("settings/blossom")
     data object ImageDetail : Routes("image_detail/{galleryId}") {
         fun createRoute(galleryId: String): String = "image_detail/$galleryId"
     }

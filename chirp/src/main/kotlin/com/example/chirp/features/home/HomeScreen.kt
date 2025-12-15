@@ -20,10 +20,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil3.compose.AsyncImage
+import com.example.chirp.components.RelaySelector
 import com.example.chirp.features.home.components.NoteCard
 import com.example.chirp.ui.theme.Spacing
-import io.nostr.ndk.relay.NDKRelay
-import io.nostr.ndk.relay.nip11.Nip11RelayInformation
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -38,7 +37,6 @@ fun HomeScreen(
     val state by viewModel.state.collectAsState()
     val relayFilterState by viewModel.relayFilterState.collectAsState()
     val connectedRelays by viewModel.ndk.pool.connectedRelays.collectAsState()
-    var showRelayDropdown by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(state.error) {
@@ -52,67 +50,12 @@ fun HomeScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Box {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
-                            modifier = Modifier.clickable { showRelayDropdown = true }
-                        ) {
-                            when (val mode = relayFilterState.mode) {
-                                is RelayFilterMode.AllRelays -> {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(32.dp)
-                                            .clip(CircleShape)
-                                            .background(MaterialTheme.colorScheme.primaryContainer)
-                                    )
-                                    Text(
-                                        "Feed",
-                                        style = MaterialTheme.typography.titleLarge,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                }
-                                is RelayFilterMode.SingleRelay -> {
-                                    RelayTitleContent(relay = mode.relay)
-                                }
-                            }
-                        }
-
-                        DropdownMenu(
-                            expanded = showRelayDropdown,
-                            onDismissRequest = { showRelayDropdown = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("Feed") },
-                                onClick = {
-                                    viewModel.selectRelayFilter(RelayFilterMode.AllRelays)
-                                    showRelayDropdown = false
-                                },
-                                leadingIcon = {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(24.dp)
-                                            .clip(CircleShape)
-                                            .background(MaterialTheme.colorScheme.primaryContainer)
-                                    )
-                                }
-                            )
-
-                            if (connectedRelays.isNotEmpty()) {
-                                HorizontalDivider()
-
-                                connectedRelays.forEach { relay ->
-                                    RelayDropdownItem(
-                                        relay = relay,
-                                        onClick = {
-                                            viewModel.selectRelayFilter(RelayFilterMode.SingleRelay(relay))
-                                            showRelayDropdown = false
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                    }
+                    RelaySelector(
+                        currentMode = relayFilterState.mode,
+                        connectedRelays = connectedRelays,
+                        defaultLabel = "Feed",
+                        onModeSelected = { viewModel.selectRelayFilter(it) }
+                    )
                 },
                 actions = {
                     IconButton(onClick = onNavigateToSettings) {
@@ -175,83 +118,4 @@ fun HomeScreen(
             }
         }
     }
-}
-
-@Composable
-private fun RelayTitleContent(relay: NDKRelay) {
-    val nip11Data by produceState<Nip11RelayInformation?>(
-        initialValue = relay.nip11Info,
-        key1 = relay.url
-    ) {
-        if (relay.nip11Info == null) {
-            val result = relay.fetchNip11Info()
-            value = result.getOrNull()
-        }
-    }
-
-    val iconUrl = nip11Data?.icon
-    val name = nip11Data?.name ?: relay.url.removePrefix("wss://").removePrefix("ws://")
-
-    if (iconUrl != null) {
-        AsyncImage(
-            model = iconUrl,
-            contentDescription = "Relay icon",
-            modifier = Modifier
-                .size(32.dp)
-                .clip(CircleShape)
-        )
-    } else {
-        Icon(
-            imageVector = Icons.Default.Cloud,
-            contentDescription = "Relay",
-            modifier = Modifier.size(32.dp)
-        )
-    }
-
-    Text(
-        text = name,
-        style = MaterialTheme.typography.titleLarge,
-        fontWeight = FontWeight.SemiBold
-    )
-}
-
-@Composable
-private fun RelayDropdownItem(
-    relay: NDKRelay,
-    onClick: () -> Unit
-) {
-    val nip11Data by produceState<Nip11RelayInformation?>(
-        initialValue = relay.nip11Info,
-        key1 = relay.url
-    ) {
-        if (relay.nip11Info == null) {
-            val result = relay.fetchNip11Info()
-            value = result.getOrNull()
-        }
-    }
-
-    val iconUrl = nip11Data?.icon
-    val name = nip11Data?.name ?: relay.url.removePrefix("wss://").removePrefix("ws://")
-
-    DropdownMenuItem(
-        text = { Text(name) },
-        onClick = onClick,
-        leadingIcon = {
-            if (iconUrl != null) {
-                AsyncImage(
-                    model = iconUrl,
-                    contentDescription = "Relay icon",
-                    modifier = Modifier
-                        .size(24.dp)
-                        .clip(CircleShape)
-                )
-            } else {
-                Icon(
-                    imageVector = Icons.Default.Cloud,
-                    contentDescription = "Relay",
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-        }
-    )
 }

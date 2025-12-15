@@ -15,7 +15,9 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.selects.select
 
 /**
  * Represents an active subscription to Nostr events matching a set of filters.
@@ -213,5 +215,62 @@ class NDKSubscription(
      */
     internal fun emitCached(event: NDKEvent) {
         _events.tryEmit(event)
+    }
+
+    /**
+     * Fetches the first event matching this subscription, waiting for EOSE.
+     *
+     * This method races between:
+     * - First event received from any relay
+     * - EOSE received from all active relays (no events found)
+     *
+     * When EOSE is received from all relays before any event, returns null.
+     * Automatically stops the subscription when done.
+     *
+     * @return The first matching event, or null if EOSE received with no events
+     */
+    suspend fun fetchEvent(): NDKEvent? {
+        // Channels to signal events or EOSE completion
+        val eventsChannel = kotlinx.coroutines.channels.Channel<NDKEvent>(1)
+        val eoseChannel = kotlinx.coroutines.channels.Channel<Unit>(1)
+
+        // Collect events until first one arrives
+        val eventJob = cacheScope.launch {
+            events.first().let { eventsChannel.send(it) }
+        }
+
+        // Monitor EOSE status
+        val eoseJob = cacheScope.launch {
+            eosePerRelay.collect { relayEoseMap ->
+                val activeRelayUrls = _activeRelays.value.map { it.url }.toSet()
+                if (activeRelayUrls.isNotEmpty() &&
+                    activeRelayUrls.all { url -> relayEoseMap[url] == true }
+                ) {
+                    eoseChannel.trySend(Unit)
+                }
+            }
+        }
+
+        try {
+            return select {
+                eventsChannel.onReceive { event ->
+                    eventJob.cancel()
+                    eoseJob.cancel()
+                    event
+                }
+
+                eoseChannel.onReceive {
+                    eventJob.cancel()
+                    eoseJob.cancel()
+                    null
+                }
+            }
+        } finally {
+            eventJob.cancel()
+            eoseJob.cancel()
+            eventsChannel.close()
+            eoseChannel.close()
+            stop()
+        }
     }
 }

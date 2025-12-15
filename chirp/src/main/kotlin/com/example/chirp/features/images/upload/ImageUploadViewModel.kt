@@ -9,7 +9,8 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import io.nostr.ndk.NDK
-import io.nostr.ndk.blossom.BlossomClient
+import io.nostr.ndk.blossom.BlossomUploadOptions
+import io.nostr.ndk.blossom.NDKBlossom
 import io.nostr.ndk.builders.ImageBuilder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -24,11 +25,12 @@ import java.io.File
 import java.io.IOException
 import javax.inject.Inject
 
+private const val DEFAULT_FALLBACK_SERVER = "https://blossom.primal.net"
+
 @HiltViewModel
 class ImageUploadViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val ndk: NDK,
-    private val blossomClient: BlossomClient
+    private val ndk: NDK
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ImageUploadState())
@@ -107,18 +109,19 @@ class ImageUploadViewModel @Inject constructor(
                 val signer = ndk.currentUser.value?.signer
                     ?: throw Exception("No active user")
 
+                val blossom = NDKBlossom(ndk, signer)
                 val builder = ImageBuilder().caption(state.value.caption)
 
                 // Upload each image with progress tracking
                 state.value.selectedImages.forEachIndexed { index, img ->
-                    val uploadResult = blossomClient.upload(
+                    val blob = blossom.upload(
                         file = img.file,
-                        signer = signer,
-                        mimeType = img.mimeType
-                    ).getOrThrow()
+                        mimeType = img.mimeType,
+                        options = BlossomUploadOptions(fallbackServer = DEFAULT_FALLBACK_SERVER)
+                    )
 
                     builder.addImage(
-                        uploadResult = uploadResult,
+                        blob = blob,
                         blurhash = img.blurhash,
                         dimensions = img.dimensions,
                         alt = img.alt
@@ -131,7 +134,6 @@ class ImageUploadViewModel @Inject constructor(
 
                 // Build and publish event
                 val imageEvent = builder.build(signer)
-                // NDKImage is a wrapper around NDKEvent, so we can cast it
                 ndk.publish(imageEvent as io.nostr.ndk.models.NDKEvent)
 
                 // Clean up temp files

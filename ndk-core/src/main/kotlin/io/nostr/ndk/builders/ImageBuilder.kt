@@ -1,6 +1,6 @@
 package io.nostr.ndk.builders
 
-import io.nostr.ndk.blossom.BlossomUploadResult
+import io.nostr.ndk.blossom.BlobDescriptor
 import io.nostr.ndk.crypto.NDKSigner
 import io.nostr.ndk.crypto.UnsignedEvent
 import io.nostr.ndk.kinds.NDKImage
@@ -14,7 +14,7 @@ import io.nostr.ndk.nips.KIND_IMAGE
  * ```
  * val imageEvent = ImageBuilder()
  *     .caption("Beautiful sunset!")
- *     .addImage(uploadResult, blurhash = "LKO2...", dimensions = 1920 to 1080)
+ *     .addImage(blobDescriptor, blurhash = "LKO2...", dimensions = 1920 to 1080)
  *     .build(signer)
  * ```
  */
@@ -40,26 +40,26 @@ class ImageBuilder {
     /**
      * Add an image to the gallery.
      *
-     * @param uploadResult Result from Blossom upload
-     * @param blurhash Blurhash string for placeholder
-     * @param dimensions Image dimensions (width x height)
-     * @param alt Alt text for accessibility
+     * @param blob BlobDescriptor from NDKBlossom upload
+     * @param blurhash Blurhash string for placeholder (uses blob.blurhash if not provided)
+     * @param dimensions Image dimensions (width x height) (uses blob dimensions if not provided)
+     * @param alt Alt text for accessibility (uses blob.alt if not provided)
      */
     fun addImage(
-        uploadResult: BlossomUploadResult,
+        blob: BlobDescriptor,
         blurhash: String? = null,
         dimensions: Pair<Int, Int>? = null,
         alt: String? = null
     ) = apply {
         images.add(
             ImageMetadata(
-                url = uploadResult.url,
-                blurhash = blurhash,
-                dimensions = dimensions,
-                mimeType = uploadResult.mimeType,
-                sha256 = uploadResult.sha256,
-                size = uploadResult.size,
-                alt = alt
+                url = blob.url,
+                blurhash = blurhash ?: blob.blurhash,
+                dimensions = dimensions ?: blob.width?.let { w -> blob.height?.let { h -> w to h } },
+                mimeType = blob.mimeType,
+                sha256 = blob.sha256,
+                size = blob.size,
+                alt = alt ?: blob.alt
             )
         )
     }

@@ -2,6 +2,8 @@ package com.example.chirp.features.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.chirp.models.RelayFilterMode
+import com.example.chirp.models.RelayFilterState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.nostr.ndk.NDK
 import io.nostr.ndk.models.NDKFilter
@@ -28,6 +30,15 @@ class HomeViewModel @Inject constructor(
 
     init {
         loadFeed()
+
+        // Reload feed when activeFollows changes (e.g., user follows someone new)
+        viewModelScope.launch {
+            ndk.activeFollows.collect { follows ->
+                if (follows.isNotEmpty() && subscription != null) {
+                    refreshFeed()
+                }
+            }
+        }
     }
 
     fun onIntent(intent: HomeIntent) {
@@ -49,13 +60,20 @@ class HomeViewModel @Inject constructor(
             try {
                 subscription?.stop()
 
+                val relayFilterMode = _relayFilterState.value.mode
+
+                // When exploring a specific relay, show all content (no author filter)
+                // Otherwise, filter by followed authors
+                val authors = when (relayFilterMode) {
+                    is RelayFilterMode.SingleRelay -> null
+                    is RelayFilterMode.AllRelays -> ndk.activeFollows.value.ifEmpty { null }
+                }
+
                 val filter = NDKFilter(
                     kinds = setOf(1),
+                    authors = authors,
                     limit = 100
                 )
-
-                // Create subscription based on relay filter mode
-                val relayFilterMode = _relayFilterState.value.mode
 
                 subscription = when (relayFilterMode) {
                     is RelayFilterMode.AllRelays -> ndk.subscribe(filter)

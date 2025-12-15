@@ -93,6 +93,9 @@ fun MainScreen(
                     VideoFeedScreen(
                         onNavigateToProfile = { pubkey ->
                             navController.navigate(Routes.Profile.createRoute(pubkey))
+                        },
+                        onNavigateToRecord = {
+                            navController.navigate(Routes.VideoRecord.route)
                         }
                     )
                 }

@@ -14,17 +14,26 @@ import io.nostr.ndk.relay.NDKPool
 import io.nostr.ndk.relay.NDKRelay
 import io.nostr.ndk.subscription.NDKSubscription
 import io.nostr.ndk.subscription.NDKSubscriptionManager
+import io.nostr.ndk.nips.KIND_CONTACT_LIST
+import io.nostr.ndk.nips.followedPubkeys
+import io.nostr.ndk.utils.Nip19
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -89,6 +98,14 @@ class NDK(
     val cacheAdapter: NDKCacheAdapter? = null,
     val accountStorage: NDKAccountStorage? = null
 ) {
+    companion object {
+        /**
+         * Fallback npub used to fetch follows when no user is logged in.
+         * This provides a default "explore" feed for anonymous users.
+         */
+        const val FALLBACK_FEED_NPUB = "npub1l2vyh47mk2p0qlsku7hg0vn29faehy9hy34ygaclpn66ukqp3afqutajft"
+    }
+
     /**
      * Whether to use the outbox model for relay selection.
      * When enabled, subscriptions with author filters will query each author's write relays.
@@ -201,6 +218,24 @@ class NDK(
      */
     val accounts: StateFlow<List<NDKCurrentUser>> = _accounts.asStateFlow()
 
+    // Active follows (for feed filtering)
+    private val _fallbackFollows = MutableStateFlow<Set<PublicKey>>(emptySet())
+    private var fallbackFollowsJob: Job? = null
+
+    /**
+     * The active set of followed pubkeys for feed filtering.
+     *
+     * When logged in: returns the current user's follows.
+     * When not logged in: returns the fallback pubkey's follows.
+     *
+     * Use this to filter content feeds to show only content from followed users.
+     */
+    val activeFollows: StateFlow<Set<PublicKey>> = _currentUser
+        .flatMapLatest { user ->
+            user?.follows ?: _fallbackFollows
+        }
+        .stateIn(scope, SharingStarted.Eagerly, emptySet())
+
     /**
      * Registers an additional event kind to be auto-fetched for sessions.
      * Call before login() to ensure the kind is included in the session subscription.
@@ -234,6 +269,10 @@ class NDK(
      */
     suspend fun login(signer: NDKSigner): NDKCurrentUser {
         val pubkey = signer.pubkey
+
+        // Cancel fallback follows fetch since we have a user now
+        fallbackFollowsJob?.cancel()
+        fallbackFollowsJob = null
 
         // Check if account already exists
         val existing = _accounts.value.find { it.pubkey == pubkey }
@@ -284,6 +323,11 @@ class NDK(
 
         // Remove from storage
         accountStorage?.deleteAccount(pubkey)
+
+        // If no users remain, fetch fallback follows
+        if (_accounts.value.isEmpty()) {
+            fetchFallbackFollows()
+        }
     }
 
     /**
@@ -336,6 +380,9 @@ class NDK(
      * Connects to all explicit relays and outbox relays.
      * Both pools are connected in parallel for faster startup.
      *
+     * If no user is logged in, also fetches the fallback pubkey's follows
+     * for use with activeFollows.
+     *
      * @param timeoutMs Maximum time to wait for connections (default: 5000ms)
      */
     suspend fun connect(timeoutMs: Long = 5000) {
@@ -348,6 +395,42 @@ class NDK(
         coroutineScope {
             launch { pool.connect(timeoutMs) }
             launch { outboxPool.connect(timeoutMs) }
+        }
+
+        // If no user logged in, fetch fallback follows
+        if (_currentUser.value == null) {
+            fetchFallbackFollows()
+        }
+    }
+
+    /**
+     * Fetches the follows for the fallback pubkey.
+     * Called when no user is logged in to populate activeFollows.
+     */
+    private fun fetchFallbackFollows() {
+        // Cancel any existing job
+        fallbackFollowsJob?.cancel()
+
+        val fallbackPubkey = when (val decoded = Nip19.decode(FALLBACK_FEED_NPUB)) {
+            is Nip19.Decoded.Npub -> decoded.pubkey
+            else -> return
+        }
+
+        fallbackFollowsJob = scope.launch {
+            val filter = NDKFilter(
+                kinds = setOf(KIND_CONTACT_LIST),
+                authors = setOf(fallbackPubkey),
+                limit = 1
+            )
+
+            val subscription = subscribe(filter)
+            subscription.events.collect { event ->
+                if (event.kind == KIND_CONTACT_LIST && event.pubkey == fallbackPubkey) {
+                    _fallbackFollows.value = event.followedPubkeys.toSet()
+                    subscription.stop()
+                    fallbackFollowsJob?.cancel()
+                }
+            }
         }
     }
 

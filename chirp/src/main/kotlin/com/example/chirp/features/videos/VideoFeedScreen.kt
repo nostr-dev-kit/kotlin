@@ -10,11 +10,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.ErrorOutline
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.VolumeOff
@@ -31,6 +27,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.chirp.components.VideoPlayer
+import com.example.chirp.util.formatRelativeTime
 import io.nostr.ndk.kinds.NDKVideo
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -176,15 +173,6 @@ private fun VideoPlayerPage(
             }
         }
 
-        // Interaction buttons (right side)
-        InteractionButtons(
-            onLikeClick = { /* TODO: Implement like */ },
-            onCommentClick = { /* TODO: Implement comment */ },
-            onShareClick = { /* TODO: Implement share */ },
-            modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .padding(end = 16.dp, bottom = 80.dp)
-        )
     }
 }
 
@@ -234,23 +222,10 @@ private fun VideoInfoOverlay(
 
         // Timestamp
         Text(
-            text = formatTimestamp(video.publishedAt ?: video.createdAt),
+            text = formatRelativeTime(video.publishedAt ?: video.createdAt),
             color = Color.White.copy(alpha = 0.7f),
             style = MaterialTheme.typography.labelSmall
         )
-    }
-}
-
-private fun formatTimestamp(unixTimestamp: Long): String {
-    val now = System.currentTimeMillis() / 1000
-    val diff = now - unixTimestamp
-
-    return when {
-        diff < 60 -> "just now"
-        diff < 3600 -> "${diff / 60}m ago"
-        diff < 86400 -> "${diff / 3600}h ago"
-        diff < 604800 -> "${diff / 86400}d ago"
-        else -> "${diff / 604800}w ago"
     }
 }
 
@@ -360,70 +335,3 @@ private fun ErrorState(error: String, onNavigateToRecord: () -> Unit = {}) {
     }
 }
 
-@Composable
-private fun InteractionButtons(
-    onLikeClick: () -> Unit,
-    onCommentClick: () -> Unit,
-    onShareClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(24.dp)
-    ) {
-        // Like button
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            IconButton(
-                onClick = onLikeClick,
-                modifier = Modifier.size(48.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.FavoriteBorder,
-                    contentDescription = "Like",
-                    tint = Color.White,
-                    modifier = Modifier.size(32.dp)
-                )
-            }
-        }
-
-        // Comment button
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            IconButton(
-                onClick = onCommentClick,
-                modifier = Modifier.size(48.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.ChatBubbleOutline,
-                    contentDescription = "Comment",
-                    tint = Color.White,
-                    modifier = Modifier.size(32.dp)
-                )
-            }
-        }
-
-        // Share button
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            IconButton(
-                onClick = onShareClick,
-                modifier = Modifier.size(48.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Share,
-                    contentDescription = "Share",
-                    tint = Color.White,
-                    modifier = Modifier.size(32.dp)
-                )
-            }
-        }
-    }
-}

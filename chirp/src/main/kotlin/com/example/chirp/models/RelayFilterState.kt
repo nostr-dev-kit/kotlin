@@ -1,4 +1,4 @@
-package com.example.chirp.features.home
+package com.example.chirp.models
 
 import io.nostr.ndk.relay.NDKRelay
 

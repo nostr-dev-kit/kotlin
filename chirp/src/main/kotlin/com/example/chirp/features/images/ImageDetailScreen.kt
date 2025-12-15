@@ -20,6 +20,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import com.example.chirp.util.formatRelativeTime
 import io.nostr.ndk.kinds.NDKImage
 
 /**
@@ -170,7 +171,7 @@ fun ImageDetailScreen(
                             color = Color.White.copy(alpha = 0.7f)
                         )
                         Text(
-                            text = formatTimestamp(gallery.createdAt),
+                            text = formatRelativeTime(gallery.createdAt),
                             style = MaterialTheme.typography.labelSmall,
                             color = Color.White.copy(alpha = 0.7f)
                         )
@@ -187,18 +188,5 @@ fun ImageDetailScreen(
                 }
             }
         }
-    }
-}
-
-private fun formatTimestamp(unixTimestamp: Long): String {
-    val now = System.currentTimeMillis() / 1000
-    val diff = now - unixTimestamp
-
-    return when {
-        diff < 60 -> "just now"
-        diff < 3600 -> "${diff / 60}m ago"
-        diff < 86400 -> "${diff / 3600}h ago"
-        diff < 604800 -> "${diff / 86400}d ago"
-        else -> "${diff / 604800}w ago"
     }
 }

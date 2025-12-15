@@ -5,6 +5,8 @@ import io.nostr.ndk.models.EventId
 import io.nostr.ndk.models.NDKEvent
 import io.nostr.ndk.models.NDKFilter
 import io.nostr.ndk.relay.NDKRelay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -297,6 +299,108 @@ class NDKSubscriptionTest {
         sub.stop()
 
         assertTrue(sub.activeRelays.value.isEmpty())
+    }
+
+    // ===========================================
+    // fetchEvent Tests
+    // ===========================================
+
+    @Test
+    fun `fetchEvent returns event when event arrives before EOSE`() = runTest {
+        val filter = NDKFilter(kinds = setOf(1))
+        val sub = NDKSubscription("test", listOf(filter), ndk)
+
+        val relay = createTestRelay("wss://relay1.com")
+        sub.start(setOf(relay))
+
+        val event = createTestEvent("event1", kind = 1)
+
+        // Launch fetchEvent in background
+        val resultDeferred = launch {
+            val result = sub.fetchEvent()
+            assertEquals(event, result)
+        }
+
+        // Emit event before EOSE
+        sub.emit(event, relay)
+
+        resultDeferred.join()
+    }
+
+    @Test
+    fun `fetchEvent returns null when EOSE arrives before event`() = runTest {
+        val filter = NDKFilter(kinds = setOf(1))
+        val sub = NDKSubscription("test", listOf(filter), ndk)
+
+        val relay = createTestRelay("wss://relay1.com")
+        sub.start(setOf(relay))
+
+        // Launch fetchEvent in background
+        val resultDeferred = launch {
+            val result = sub.fetchEvent()
+            assertNull(result)
+        }
+
+        // Mark EOSE before any events
+        sub.markEose(relay)
+
+        resultDeferred.join()
+    }
+
+    @Test
+    fun `fetchEvent stops subscription when done`() = runTest {
+        val filter = NDKFilter(kinds = setOf(1))
+        val sub = NDKSubscription("test", listOf(filter), ndk)
+
+        val relay = createTestRelay("wss://relay1.com")
+        sub.start(setOf(relay))
+
+        assertTrue(sub.activeRelays.value.isNotEmpty())
+
+        val event = createTestEvent("event1", kind = 1)
+
+        // Launch fetchEvent
+        val resultDeferred = launch {
+            sub.fetchEvent()
+        }
+
+        sub.emit(event, relay)
+        resultDeferred.join()
+
+        // Subscription should be stopped
+        assertTrue(sub.activeRelays.value.isEmpty())
+    }
+
+    @Test
+    fun `fetchEvent waits for all relays to EOSE before returning null`() = runTest {
+        val filter = NDKFilter(kinds = setOf(1))
+        val sub = NDKSubscription("test", listOf(filter), ndk)
+
+        val relay1 = createTestRelay("wss://relay1.com")
+        val relay2 = createTestRelay("wss://relay2.com")
+        sub.start(setOf(relay1, relay2))
+
+        var result: NDKEvent? = createTestEvent("placeholder", kind = 1)
+
+        // Launch fetchEvent in background
+        val resultDeferred = launch {
+            result = sub.fetchEvent()
+        }
+
+        // Mark EOSE for only one relay - should not return yet
+        sub.markEose(relay1)
+
+        // Give time for processing
+        kotlinx.coroutines.delay(50)
+
+        // Still waiting since relay2 hasn't sent EOSE
+        assertTrue(resultDeferred.isActive)
+
+        // Mark EOSE for second relay - now should return null
+        sub.markEose(relay2)
+
+        resultDeferred.join()
+        assertNull(result)
     }
 
     // Helper functions

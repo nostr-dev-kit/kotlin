@@ -1,6 +1,6 @@
 package io.nostr.ndk.builders
 
-import io.nostr.ndk.blossom.BlossomUploadResult
+import io.nostr.ndk.blossom.BlobDescriptor
 import io.nostr.ndk.crypto.NDKKeyPair
 import io.nostr.ndk.crypto.NDKPrivateKeySigner
 import io.nostr.ndk.kinds.NDKImage
@@ -11,20 +11,32 @@ import org.junit.Test
 
 class ImageBuilderTest {
 
+    private fun createBlob(
+        url: String,
+        sha256: String,
+        size: Long,
+        mimeType: String
+    ) = BlobDescriptor(
+        url = url,
+        sha256 = sha256,
+        size = size,
+        mimeType = mimeType
+    )
+
     @Test
     fun `build creates kind 20 event with imeta tags`() = runTest {
         val signer = NDKPrivateKeySigner(NDKKeyPair.generate())
-        val uploadResult = BlossomUploadResult(
+        val blob = createBlob(
             url = "https://cdn.example.com/image.jpg",
             sha256 = "abc123",
             size = 204800,
-            type = "image/jpeg"
+            mimeType = "image/jpeg"
         )
 
         val image = ImageBuilder()
             .caption("Beautiful sunset!")
             .addImage(
-                uploadResult = uploadResult,
+                blob = blob,
                 blurhash = "LKO2?U%2Tw=w",
                 dimensions = 1920 to 1080,
                 alt = "Sunset"
@@ -52,11 +64,11 @@ class ImageBuilderTest {
         val image = ImageBuilder()
             .caption("Gallery")
             .addImage(
-                BlossomUploadResult("https://cdn.example.com/img1.jpg", "hash1", 100000, "image/jpeg"),
+                createBlob("https://cdn.example.com/img1.jpg", "hash1", 100000, "image/jpeg"),
                 blurhash = "LBLUE"
             )
             .addImage(
-                BlossomUploadResult("https://cdn.example.com/img2.jpg", "hash2", 200000, "image/png"),
+                createBlob("https://cdn.example.com/img2.jpg", "hash2", 200000, "image/png"),
                 blurhash = "LRED"
             )
             .build(signer)
@@ -72,7 +84,7 @@ class ImageBuilderTest {
 
         val image = ImageBuilder()
             .addImage(
-                BlossomUploadResult("https://cdn.example.com/img.jpg", "hash", 100000, "image/jpeg")
+                createBlob("https://cdn.example.com/img.jpg", "hash", 100000, "image/jpeg")
             )
             .build(signer)
 
@@ -99,7 +111,7 @@ class ImageBuilderTest {
 
         val image = ImageBuilder()
             .addImage(
-                BlossomUploadResult("https://cdn.example.com/img.jpg", "abc123", 204800, "image/jpeg"),
+                createBlob("https://cdn.example.com/img.jpg", "abc123", 204800, "image/jpeg"),
                 blurhash = "LBLUE",
                 dimensions = 1920 to 1080,
                 alt = "TestImage"
@@ -125,7 +137,7 @@ class ImageBuilderTest {
 
         val image = ImageBuilder()
             .addImage(
-                BlossomUploadResult("https://cdn.example.com/img.jpg", "abc123", 204800, "image/jpeg")
+                createBlob("https://cdn.example.com/img.jpg", "abc123", 204800, "image/jpeg")
             )
             .build(signer)
 
