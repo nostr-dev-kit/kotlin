@@ -2,6 +2,7 @@ package io.nostr.ndk.subscription
 
 import io.nostr.ndk.NDK
 import io.nostr.ndk.relay.NDKRelay
+import okhttp3.OkHttpClient
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -13,12 +14,13 @@ class NDKValidationRatioTrackerTest {
     private lateinit var tracker: NDKValidationRatioTracker
     private lateinit var ndk: NDK
     private lateinit var relay: NDKRelay
+    private val okHttpClient = OkHttpClient.Builder().build()
 
     @Before
     fun setup() {
         tracker = NDKValidationRatioTracker()
         ndk = NDK()
-        relay = NDKRelay("wss://test.relay", ndk)
+        relay = NDKRelay("wss://test.relay", ndk, okHttpClient)
     }
 
     @Test
@@ -87,7 +89,7 @@ class NDKValidationRatioTrackerTest {
 
     @Test
     fun `getTrustRatio returns null for unknown relay`() {
-        val unknownRelay = NDKRelay("wss://unknown.relay", ndk)
+        val unknownRelay = NDKRelay("wss://unknown.relay", ndk, okHttpClient)
         val trustRatio = tracker.getTrustRatio(unknownRelay)
         assertNull(trustRatio)
     }
@@ -137,7 +139,7 @@ class NDKValidationRatioTrackerTest {
 
     @Test
     fun `resetRelay clears stats for specific relay`() {
-        val relay2 = NDKRelay("wss://test2.relay", ndk)
+        val relay2 = NDKRelay("wss://test2.relay", ndk, okHttpClient)
 
         tracker.recordValidation(relay, true)
         tracker.recordValidation(relay2, true)

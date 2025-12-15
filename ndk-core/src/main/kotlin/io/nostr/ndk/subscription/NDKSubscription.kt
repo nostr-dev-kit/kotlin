@@ -94,6 +94,8 @@ class NDKSubscription(
      */
     val activeRelays: StateFlow<Set<NDKRelay>> = _activeRelays.asStateFlow()
 
+    private var isStopped = false
+
     /**
      * Starts the subscription on the specified relays.
      * This sends the subscription filters to each relay.
@@ -101,6 +103,7 @@ class NDKSubscription(
      * @param relays Set of relays to subscribe on
      */
     internal fun start(relays: Set<NDKRelay>) {
+        if (isStopped) return
         _activeRelays.value = relays
         relays.forEach { relay ->
             relay.subscribe(id, filters)
@@ -149,6 +152,7 @@ class NDKSubscription(
      * After calling stop(), no more events will be emitted.
      */
     fun stop() {
+        isStopped = true
         // Cancel relay update tracking
         relayUpdateJob?.cancel()
         relayUpdateJob = null

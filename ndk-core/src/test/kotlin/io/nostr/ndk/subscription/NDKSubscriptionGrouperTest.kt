@@ -6,6 +6,7 @@ import io.nostr.ndk.models.NDKFilter
 import io.nostr.ndk.relay.NDKRelay
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
+import okhttp3.OkHttpClient
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -16,12 +17,13 @@ class NDKSubscriptionGrouperTest {
     private lateinit var ndk: NDK
     private lateinit var grouper: NDKSubscriptionGrouper
     private lateinit var relay: NDKRelay
+    private val okHttpClient = OkHttpClient.Builder().build()
 
     @Before
     fun setup() {
         ndk = NDK()
         grouper = NDKSubscriptionGrouper(ndk, groupingDelayMs = 50)
-        relay = NDKRelay("wss://test.relay", ndk)
+        relay = NDKRelay("wss://test.relay", ndk, okHttpClient)
     }
 
     @Test

@@ -46,3 +46,4 @@ captures/
 
 # Git worktrees
 .worktrees/
+android-sdk/

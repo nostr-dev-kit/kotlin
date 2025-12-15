@@ -14,52 +14,55 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runTest
+import okhttp3.OkHttpClient
 import org.junit.Test
 import org.junit.Assert.*
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class NDKRelayTest {
 
+    private val okHttpClient = OkHttpClient.Builder().build()
+
     @Test
     fun `relay starts in DISCONNECTED state`() = runTest {
-        val relay = NDKRelay("wss://test.relay", null)
+        val relay = NDKRelay("wss://test.relay", null, okHttpClient)
         assertEquals(NDKRelayState.DISCONNECTED, relay.state.value)
     }
 
     @Test
     fun `connectionAttempts starts at 0`() = runTest {
-        val relay = NDKRelay("wss://test.relay", null)
+        val relay = NDKRelay("wss://test.relay", null, okHttpClient)
         assertEquals(0, relay.connectionAttempts)
     }
 
     @Test
     fun `lastConnectedAt starts as null`() = runTest {
-        val relay = NDKRelay("wss://test.relay", null)
+        val relay = NDKRelay("wss://test.relay", null, okHttpClient)
         assertNull(relay.lastConnectedAt)
     }
 
     @Test
     fun `validatedEventCount starts at 0`() = runTest {
-        val relay = NDKRelay("wss://test.relay", null)
+        val relay = NDKRelay("wss://test.relay", null, okHttpClient)
         assertEquals(0L, relay.validatedEventCount)
     }
 
     @Test
     fun `nonValidatedEventCount starts at 0`() = runTest {
-        val relay = NDKRelay("wss://test.relay", null)
+        val relay = NDKRelay("wss://test.relay", null, okHttpClient)
         assertEquals(0L, relay.nonValidatedEventCount)
     }
 
     @Test
     fun `url is stored correctly`() = runTest {
         val url = "wss://test.relay"
-        val relay = NDKRelay(url, null)
+        val relay = NDKRelay(url, null, okHttpClient)
         assertEquals(url, relay.url)
     }
 
     @Test
     fun `state transitions from DISCONNECTED to CONNECTING on connect`() = runTest {
-        val relay = NDKRelay("wss://test.relay", null)
+        val relay = NDKRelay("wss://test.relay", null, okHttpClient)
 
         // This test will fail until we implement a mock WebSocket
         // For now, just verify the relay can be created
@@ -68,7 +71,7 @@ class NDKRelayTest {
 
     @Test
     fun `subscribe sends REQ message`() = runTest {
-        val relay = NDKRelay("wss://test.relay", null)
+        val relay = NDKRelay("wss://test.relay", null, okHttpClient)
         val filters = listOf(NDKFilter(kinds = setOf(1)))
 
         // This will need WebSocket mocking
@@ -80,7 +83,7 @@ class NDKRelayTest {
 
     @Test
     fun `unsubscribe sends CLOSE message`() = runTest {
-        val relay = NDKRelay("wss://test.relay", null)
+        val relay = NDKRelay("wss://test.relay", null, okHttpClient)
 
         // This will need WebSocket mocking
         // relay.unsubscribe("sub1")
@@ -91,7 +94,7 @@ class NDKRelayTest {
 
     @Test
     fun `publish sends EVENT message and waits for OK`() = runTest {
-        val relay = NDKRelay("wss://test.relay", null)
+        val relay = NDKRelay("wss://test.relay", null, okHttpClient)
         val event = createTestEvent()
 
         // This will need WebSocket mocking
@@ -103,7 +106,7 @@ class NDKRelayTest {
 
     @Test
     fun `disconnect transitions state to DISCONNECTED`() = runTest {
-        val relay = NDKRelay("wss://test.relay", null)
+        val relay = NDKRelay("wss://test.relay", null, okHttpClient)
 
         // This will need WebSocket mocking
         relay.disconnect()
@@ -113,7 +116,7 @@ class NDKRelayTest {
 
     @Test
     fun `connectionAttempts increments on each connect attempt`() = runTest {
-        val relay = NDKRelay("wss://test.relay", null)
+        val relay = NDKRelay("wss://test.relay", null, okHttpClient)
 
         // This will need to simulate failed connection attempts
         assertEquals(0, relay.connectionAttempts)
@@ -124,7 +127,7 @@ class NDKRelayTest {
 
     @Test
     fun `lastConnectedAt is set when connection succeeds`() = runTest {
-        val relay = NDKRelay("wss://test.relay", null)
+        val relay = NDKRelay("wss://test.relay", null, okHttpClient)
 
         // This will need WebSocket mocking to simulate successful connection
         assertNull(relay.lastConnectedAt)
@@ -175,7 +178,7 @@ class NDKRelayTest {
         }
 
         val ndk = NDK(signer = mockSigner)
-        val relay = NDKRelay(relayUrl, ndk)
+        val relay = NDKRelay(relayUrl, ndk, okHttpClient)
 
         // Note: This will fail to send because there's no WebSocket connection
         // but we can verify the event creation logic runs
@@ -207,7 +210,7 @@ class NDKRelayTest {
         }
 
         val ndk = NDK(signer = mockSigner)
-        val relay = NDKRelay("wss://test.relay", ndk)
+        val relay = NDKRelay("wss://test.relay", ndk, okHttpClient)
 
         assertEquals(NDKRelayState.DISCONNECTED, relay.state.value)
 
@@ -220,7 +223,7 @@ class NDKRelayTest {
 
     @Test
     fun `authenticate without signer logs warning and returns early`() = runTest {
-        val relay = NDKRelay("wss://test.relay", null)
+        val relay = NDKRelay("wss://test.relay", null, okHttpClient)
 
         assertEquals(NDKRelayState.DISCONNECTED, relay.state.value)
 
@@ -259,7 +262,7 @@ class NDKRelayTest {
         }
 
         val ndk = NDK(signer = mockSigner)
-        val relay = NDKRelay(relayUrl, ndk)
+        val relay = NDKRelay(relayUrl, ndk, okHttpClient)
 
         relay.authenticate(testChallenge)
 

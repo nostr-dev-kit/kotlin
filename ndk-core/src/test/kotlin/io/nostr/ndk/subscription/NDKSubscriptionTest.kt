@@ -7,12 +7,14 @@ import io.nostr.ndk.models.NDKFilter
 import io.nostr.ndk.relay.NDKRelay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
+import okhttp3.OkHttpClient
 import org.junit.Assert.*
 import org.junit.Test
 
 class NDKSubscriptionTest {
 
     private val ndk = NDK()
+    private val okHttpClient = OkHttpClient.Builder().build()
 
     @Test
     fun `subscription has unique ID`() {
@@ -424,6 +426,6 @@ class NDKSubscriptionTest {
     }
 
     private fun createTestRelay(url: String): NDKRelay {
-        return NDKRelay(url, ndk)
+        return NDKRelay(url, ndk, okHttpClient)
     }
 }
